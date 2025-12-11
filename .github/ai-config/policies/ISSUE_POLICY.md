@@ -1,4 +1,4 @@
-Labels (choose ONE OR MORE from the list below; you MAY add new labels only if truly necessary):
+Labels (choose ONE OR MORE from the list below):
 
 - enhancement
 - bug
@@ -8,11 +8,8 @@ Labels (choose ONE OR MORE from the list below; you MAY add new labels only if t
 - good first issue
 - help wanted
 - invalid
-- javascript
 - question
 - wontfix
-
-Use only relevant labels and keep them minimal.
 
 ---
 

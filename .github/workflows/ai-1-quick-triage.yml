@@ -170,8 +170,8 @@ jobs:
         if: steps.triage.outputs.decision == 'question'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QUESTIONS: ${{ steps.triage.outputs.questions }}
         run: |
-          QUESTIONS='${{ steps.triage.outputs.questions }}'
           QLIST=$(echo "$QUESTIONS" | jq -r 'if length > 0 then .[] | "- " + . else empty end')
 
           COMMENT="Thanks for the issue! To help us investigate this properly, could you please provide a bit more detail?

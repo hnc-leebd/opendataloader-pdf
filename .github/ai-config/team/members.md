@@ -1,8 +1,8 @@
-| GitHub ID         | Role            |
-| ----------------- | --------------- |
-| @hnc-leebd        | DevOps Engineer |
-| @hnc-sujicho      | Project Manager |
-| @hnc-hyunheejo    | Sub Engineer    |
-| @MaximPlusov      | Main Engineer   |
-| @LonelyMidoriya   | Sub Engineer    |
-| @bdoubrov         | Project Manager |
+| GitHub ID         | Role            | Availability |
+| ----------------- | --------------- | ------------ |
+| hnc-leebd         | DevOps Engineer | Yes          |
+| hnc-sujicho       | Project Manager | No           |
+| hnc-hyunheejo     | Sub Engineer    | No           |
+| MaximPlusov       | Main Engineer   | No           |
+| LonelyMidoriya    | Sub Engineer    | No           |
+| bdoubrov          | Project Manager | No           |

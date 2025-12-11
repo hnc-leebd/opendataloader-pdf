@@ -10,24 +10,52 @@ on:
         required: true
         type: number
 
+env:
+  DAILY_LIMIT: 20  # Triage limit per day
+
 jobs:
   quick-triage:
     runs-on: ubuntu-latest
     permissions:
       issues: write
       contents: read
+      actions: read
 
     if: |
       github.event_name == 'workflow_dispatch' ||
       !contains(github.event.issue.labels.*.name, 'triaged')
 
     steps:
+      - name: Check daily limit
+        id: limit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check today's successful workflow runs
+          TODAY=$(date -u +%Y-%m-%d)
+
+          COUNT=$(gh api \
+            "/repos/${{ github.repository }}/actions/workflows/ai-1-quick-triage.yml/runs?status=success&created=>=$TODAY" \
+            --jq '.total_count')
+
+          echo "Today's runs: $COUNT / $DAILY_LIMIT"
+
+          if [ "$COUNT" -ge "$DAILY_LIMIT" ]; then
+            echo "exceeded=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Daily limit reached ($COUNT/$DAILY_LIMIT)"
+          else
+            echo "exceeded=false" >> $GITHUB_OUTPUT
+            echo "remaining=$((DAILY_LIMIT - COUNT))" >> $GITHUB_OUTPUT
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.limit.outputs.exceeded != 'true'
         with:
           sparse-checkout: README.md
           sparse-checkout-cone-mode: false
 
       - name: Gather context
+        if: steps.limit.outputs.exceeded != 'true'
         id: context
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,6 +82,7 @@ jobs:
             > /tmp/issues.txt
 
       - name: Triage
+        if: steps.limit.outputs.exceeded != 'true'
         id: triage
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

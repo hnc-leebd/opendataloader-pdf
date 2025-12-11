@@ -132,7 +132,7 @@ jobs:
             "labels": ["label1", "label2"],
             "priority": "P0" | "P1" | "P2",
             "estimated": 1 | 2 | 3 | 5 | 8,
-            "assignee": "@username",
+            "assignee": "github_id",
             "reason": "Why this action was chosen",
             "comment": "Comment to post on the issue (friendly, helpful)"
           }
@@ -174,7 +174,7 @@ jobs:
           LABELS=$(echo "$PARSED_JSON" | jq -c '.labels // []')
           PRIORITY=$(echo "$PARSED_JSON" | jq -r '.priority // "P2"')
           ESTIMATED=$(echo "$PARSED_JSON" | jq -r '.estimated // 3')
-          ASSIGNEE=$(echo "$PARSED_JSON" | jq -r '.assignee // "@MaximPlusov"' | tr -d '@')
+          ASSIGNEE=$(echo "$PARSED_JSON" | jq -r '.assignee // "github_id"' | tr -d '@')
           REASON=$(echo "$PARSED_JSON" | jq -r '.reason // "Analysis failed"')
           COMMENT=$(echo "$PARSED_JSON" | jq -r '.comment // "Unable to analyze this issue."')
 

@@ -145,12 +145,15 @@ jobs:
           PROMPT="${PROMPT//POLICY_PLACEHOLDER/$POLICY}"
           PROMPT="${PROMPT//MEMBERS_PLACEHOLDER/$MEMBERS}"
 
-          RESULT=$(npx -y @anthropic-ai/claude-code \
+          # Save prompt to file (avoid argument length limits)
+          echo "$PROMPT" > /tmp/analysis_prompt.txt
+
+          RESULT=$(cat /tmp/analysis_prompt.txt | npx -y @anthropic-ai/claude-code \
             --print \
             --output-format json \
             --verbose \
             --allowedTools "Read,Glob,Grep" \
-            "$PROMPT" 2>/dev/null || echo '{}')
+            2>&1 || echo '{}')
 
           echo "=== Analysis Result ==="
           echo "$RESULT"
@@ -218,12 +221,15 @@ jobs:
           FIX_PROMPT="${FIX_PROMPT//ISSUE_NUM/$ISSUE_NUM}"
           FIX_PROMPT="${FIX_PROMPT//ISSUE_JSON_PLACEHOLDER/$ISSUE_JSON}"
 
-          FIX_RESULT=$(npx -y @anthropic-ai/claude-code \
+          # Save prompt to file (avoid argument length limits)
+          echo "$FIX_PROMPT" > /tmp/fix_prompt.txt
+
+          FIX_RESULT=$(cat /tmp/fix_prompt.txt | npx -y @anthropic-ai/claude-code \
             --print \
             --output-format json \
             --verbose \
             --allowedTools "Read,Glob,Grep,Edit,Write,Bash" \
-            "$FIX_PROMPT" 2>&1 || echo '{"success": false, "reason": "Claude Code execution failed"}')
+            2>&1 || echo '{"success": false, "reason": "Claude Code execution failed"}')
 
           echo "=== Fix Result ==="
           echo "$FIX_RESULT"

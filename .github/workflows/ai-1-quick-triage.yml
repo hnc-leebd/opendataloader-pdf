@@ -110,14 +110,31 @@ jobs:
               messages: [{role: "user", content: $p}]
             }')")
 
-          # Extract JSON from response
-          RESULT=$(echo "$RESPONSE" | jq -r '.content[0].text' | grep -o '{.*}' | head -1)
-          echo "Raw result: $RESULT"
+          # Debug: show full API response
+          echo "=== API Response ==="
+          echo "$RESPONSE" | jq '.'
+          echo "==================="
+
+          # Check for API error
+          if echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+            echo "API Error: $(echo "$RESPONSE" | jq -r '.error.message')"
+            exit 1
+          fi
+
+          # Extract text content
+          TEXT=$(echo "$RESPONSE" | jq -r '.content[0].text // empty')
+          echo "=== LLM Text ==="
+          echo "$TEXT"
+          echo "================"
+
+          # Parse JSON from text (handle multiline JSON)
+          RESULT=$(echo "$TEXT" | jq -c '.' 2>/dev/null || echo "$TEXT" | sed -n '/{/,/}/p' | jq -c '.' 2>/dev/null || echo '{}')
+          echo "Parsed result: $RESULT"
 
           # Parse outputs
-          echo "decision=$(echo "$RESULT" | jq -r '.decision')" >> $GITHUB_OUTPUT
+          echo "decision=$(echo "$RESULT" | jq -r '.decision // "valid"')" >> $GITHUB_OUTPUT
           echo "duplicate_of=$(echo "$RESULT" | jq -r '.duplicate_of // empty')" >> $GITHUB_OUTPUT
-          echo "reason=$(echo "$RESULT" | jq -r '.reason')" >> $GITHUB_OUTPUT
+          echo "reason=$(echo "$RESULT" | jq -r '.reason // "Could not parse response"')" >> $GITHUB_OUTPUT
           echo "questions=$(echo "$RESULT" | jq -c '.questions // []')" >> $GITHUB_OUTPUT
 
       - name: "Close: Invalid"

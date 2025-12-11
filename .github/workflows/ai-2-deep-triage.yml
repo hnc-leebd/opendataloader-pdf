@@ -150,7 +150,6 @@ jobs:
 
           RESULT=$(cat /tmp/analysis_prompt.txt | npx -y @anthropic-ai/claude-code \
             --print \
-            --output-format json \
             --verbose \
             --allowedTools "Read,Glob,Grep" \
             2>&1 || echo '{}')
@@ -159,14 +158,25 @@ jobs:
           echo "$RESULT"
           echo "======================="
 
-          # Parse JSON
-          ACTION=$(echo "$RESULT" | jq -r '.action // "assign"')
-          LABELS=$(echo "$RESULT" | jq -c '.labels // []')
-          PRIORITY=$(echo "$RESULT" | jq -r '.priority // "P2"')
-          ESTIMATED=$(echo "$RESULT" | jq -r '.estimated // 3')
-          ASSIGNEE=$(echo "$RESULT" | jq -r '.assignee // "@MaximPlusov"' | tr -d '@')
-          REASON=$(echo "$RESULT" | jq -r '.reason // "Analysis failed"')
-          COMMENT=$(echo "$RESULT" | jq -r '.comment // "Unable to analyze this issue."')
+          # Extract JSON from result (handle ```json wrapper if present)
+          PARSED_JSON=$(echo "$RESULT" | sed -n '/```json/,/```/p' | sed '1d;$d')
+          if [ -z "$PARSED_JSON" ]; then
+            # Try to extract raw JSON object
+            PARSED_JSON=$(echo "$RESULT" | grep -Eo '\{[^}]+\}' | head -1 || echo '{}')
+          fi
+
+          echo "=== Parsed JSON ==="
+          echo "$PARSED_JSON"
+          echo "==================="
+
+          # Parse JSON fields
+          ACTION=$(echo "$PARSED_JSON" | jq -r '.action // "assign"')
+          LABELS=$(echo "$PARSED_JSON" | jq -c '.labels // []')
+          PRIORITY=$(echo "$PARSED_JSON" | jq -r '.priority // "P2"')
+          ESTIMATED=$(echo "$PARSED_JSON" | jq -r '.estimated // 3')
+          ASSIGNEE=$(echo "$PARSED_JSON" | jq -r '.assignee // "@MaximPlusov"' | tr -d '@')
+          REASON=$(echo "$PARSED_JSON" | jq -r '.reason // "Analysis failed"')
+          COMMENT=$(echo "$PARSED_JSON" | jq -r '.comment // "Unable to analyze this issue."')
 
           echo "action=$ACTION" >> $GITHUB_OUTPUT
           echo "labels=$LABELS" >> $GITHUB_OUTPUT
@@ -226,7 +236,6 @@ jobs:
 
           FIX_RESULT=$(cat /tmp/fix_prompt.txt | npx -y @anthropic-ai/claude-code \
             --print \
-            --output-format json \
             --verbose \
             --allowedTools "Read,Glob,Grep,Edit,Write,Bash" \
             2>&1 || echo '{"success": false, "reason": "Claude Code execution failed"}')

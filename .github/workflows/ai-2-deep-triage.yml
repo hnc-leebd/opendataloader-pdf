@@ -42,7 +42,7 @@ jobs:
           fi
 
           # Check if already deep-triaged
-          LABELS=$(gh issue view $ISSUE_NUM --json labels --jq '.labels[].name')
+          LABELS=$(gh issue view $ISSUE_NUM --repo ${{ github.repository }} --json labels --jq '.labels[].name')
           if echo "$LABELS" | grep -q "deep-triaged"; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "reason=Already deep-triaged" >> $GITHUB_OUTPUT

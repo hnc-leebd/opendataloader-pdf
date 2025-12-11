@@ -133,10 +133,10 @@ export function run(inputPath: string, options: RunOptions = {}): Promise<string
       args.push('--no-json');
     }
     if (options.useStructTree) {
-      args.push('--use-struct-tree')
+      args.push('--use-struct-tree');
     }
     if (options.readingOrder) {
-      args.push('--reading-order', options.readingOrder)
+      args.push('--reading-order', options.readingOrder);
     }
 
     args.push(inputPath);
@@ -204,10 +204,10 @@ export function convert(inputPaths: string | string[], options: ConvertOptions =
     args.push('--replace-invalid-chars', options.replaceInvalidChars);
   }
   if (options.useStructTree) {
-    args.push('--use-struct-tree')
+    args.push('--use-struct-tree');
   }
   if (options.readingOrder) {
-      args.push('--reading-order', options.readingOrder)
+      args.push('--reading-order', options.readingOrder);
   }
 
   return executeJar(args, {

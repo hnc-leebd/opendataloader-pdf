@@ -1,0 +1,181 @@
+name: "Stage 1: Quick Triage"
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to process'
+        required: true
+        type: number
+
+jobs:
+  quick-triage:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.issue.labels.*.name, 'triaged')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: README.md
+          sparse-checkout-cone-mode: false
+
+      - name: Gather context
+        id: context
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUM=${{ github.event.issue.number || inputs.issue_number }}
+
+          # Get issue details (for workflow_dispatch)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ISSUE_JSON=$(gh issue view $ISSUE_NUM --json title,body)
+            echo "title=$(echo "$ISSUE_JSON" | jq -r '.title')" >> $GITHUB_OUTPUT
+            echo "body<<EOF" >> $GITHUB_OUTPUT
+            echo "$ISSUE_JSON" | jq -r '.body // ""' >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "title=${{ github.event.issue.title }}" >> $GITHUB_OUTPUT
+            echo "body<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ github.event.issue.body }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+          # Fetch previous issues (number and title only)
+          gh issue list --state all --limit 50 --json number,title \
+            --jq ".[] | select(.number != $ISSUE_NUM) | \"#\\(.number) \\(.title)\"" \
+            > /tmp/issues.txt
+
+      - name: Triage
+        id: triage
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Build prompt
+          PROMPT=$(cat <<'EOF'
+          You are a GitHub issue triage bot. Make a quick decision based on limited information.
+
+          ## Project (from README)
+          PROJECT_README
+
+          ## Existing Issues
+          EXISTING_ISSUES
+
+          ## New Issue #ISSUE_NUM
+          Title: ISSUE_TITLE
+          Body: ISSUE_BODY
+
+          ## Decision Required
+          Based ONLY on the README and issue list above, determine:
+          1. Is this SPAM or OUT OF SCOPE? (ads, gibberish, abuse, unrelated to project) → "invalid"
+          2. Is this a DUPLICATE? (very similar to existing issue) → "duplicate"
+          3. Is this UNCLEAR? (missing reproduction steps, environment, or details) → "question"
+          4. Otherwise → "valid"
+
+          Respond with JSON only:
+          {
+            "decision": "invalid" | "duplicate" | "question" | "valid",
+            "duplicate_of": <issue number or null>,
+            "reason": "one sentence explanation",
+            "questions": ["question1", ...] // only if decision is "question"
+          }
+          EOF
+          )
+
+          # Replace placeholders
+          README_CONTENT=$(head -50 README.md 2>/dev/null || echo "No README")
+          EXISTING=$(cat /tmp/issues.txt)
+
+          PROMPT="${PROMPT//PROJECT_README/$README_CONTENT}"
+          PROMPT="${PROMPT//EXISTING_ISSUES/$EXISTING}"
+          PROMPT="${PROMPT//ISSUE_NUM/${{ github.event.issue.number || inputs.issue_number }}}"
+          PROMPT="${PROMPT//ISSUE_TITLE/${{ steps.context.outputs.title }}}"
+          PROMPT="${PROMPT//ISSUE_BODY/${{ steps.context.outputs.body }}}"
+
+          # Call API
+          RESPONSE=$(curl -s -X POST https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "content-type: application/json" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$(jq -n --arg p "$PROMPT" '{
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 256,
+              messages: [{role: "user", content: $p}]
+            }')")
+
+          # Extract JSON from response
+          RESULT=$(echo "$RESPONSE" | jq -r '.content[0].text' | grep -o '{.*}' | head -1)
+          echo "Raw result: $RESULT"
+
+          # Parse outputs
+          echo "decision=$(echo "$RESULT" | jq -r '.decision')" >> $GITHUB_OUTPUT
+          echo "duplicate_of=$(echo "$RESULT" | jq -r '.duplicate_of // empty')" >> $GITHUB_OUTPUT
+          echo "reason=$(echo "$RESULT" | jq -r '.reason')" >> $GITHUB_OUTPUT
+          echo "questions=$(echo "$RESULT" | jq -c '.questions // []')" >> $GITHUB_OUTPUT
+
+      - name: "Close: Invalid"
+        if: steps.triage.outputs.decision == 'invalid'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue close ${{ github.event.issue.number || inputs.issue_number }} \
+            --reason "not planned" \
+            --comment "Thanks for your interest! Unfortunately, this issue has been closed because: ${{ steps.triage.outputs.reason }}"
+          gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
+            --add-label "invalid,triaged"
+
+      - name: "Close: Duplicate"
+        if: steps.triage.outputs.decision == 'duplicate'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DUP="${{ steps.triage.outputs.duplicate_of }}"
+          if [ -n "$DUP" ] && [ "$DUP" != "null" ]; then
+            MSG="Thanks for the report! This issue has been closed because it duplicates #$DUP. Please follow that issue for updates."
+          else
+            MSG="Thanks for the report! This issue has been closed because it appears to duplicate an existing issue."
+          fi
+
+          gh issue close ${{ github.event.issue.number || inputs.issue_number }} \
+            --reason "not planned" \
+            --comment "$MSG"
+          gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
+            --add-label "duplicate,triaged"
+
+      - name: "Request: Clarification"
+        if: steps.triage.outputs.decision == 'question'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          QUESTIONS='${{ steps.triage.outputs.questions }}'
+          QLIST=$(echo "$QUESTIONS" | jq -r 'if length > 0 then .[] | "- " + . else empty end')
+
+          COMMENT="Thanks for the issue! To help us investigate this properly, could you please provide a bit more detail?
+
+          $QLIST"
+
+          gh issue comment ${{ github.event.issue.number || inputs.issue_number }} \
+            --body "$COMMENT"
+          gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
+            --add-label "question,triaged"
+
+      - name: "Pass: Valid"
+        if: steps.triage.outputs.decision == 'valid'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
+            --add-label "valid,triaged"
+
+          echo "✓ Issue passed quick triage: ${{ steps.triage.outputs.reason }}"
+
+          # Trigger Stage 2 (uncomment when ready)
+          # gh workflow run stage2-deep-analysis.yml \
+          #   -f issue_number=${{ github.event.issue.number || inputs.issue_number }}

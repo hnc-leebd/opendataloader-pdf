@@ -7,7 +7,7 @@
 # Also writes analysis fields to files in output_dir (default: /tmp)
 #
 # Outputs to stdout:
-#   action=auto_fix|assign
+#   action=fix/auto-eligible|fix/manual-required
 #   labels=["label1", "label2"]
 #   priority=P0|P1|P2
 #   estimated=1|2|3|5|8
@@ -42,7 +42,7 @@ if [ -z "$PARSED_JSON" ]; then
 fi
 
 # Parse JSON fields
-ACTION=$(echo "$PARSED_JSON" | jq -r '.action // "assign"')
+ACTION=$(echo "$PARSED_JSON" | jq -r '.action // "fix/manual-required"')
 LABELS=$(echo "$PARSED_JSON" | jq -c '.labels // []')
 PRIORITY=$(echo "$PARSED_JSON" | jq -r '.priority // "P2"')
 ESTIMATED=$(echo "$PARSED_JSON" | jq -r '.estimated // 3')

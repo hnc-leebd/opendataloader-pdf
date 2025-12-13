@@ -54,7 +54,7 @@ Use the ai-issue skill to:
    - What the issue is about
    - Which files/components are involved
    - How the current implementation works
-3. Decide action: "auto_fix" or "assign"
+3. Decide action: "fix/auto-eligible" or "fix/manual-required"
    - Use ai-fix-criteria.md to determine if auto-fix is appropriate
 4. Select appropriate labels, priority, and estimate based on issue-policy.md
 5. Recommend the best available team member from members.md
@@ -71,7 +71,7 @@ ${MEMBERS:-Available: benedict (available)}
 ## Required Output
 Respond with JSON only (no markdown code blocks):
 {
-  "action": "auto_fix" | "assign",
+  "action": "fix/auto-eligible" | "fix/manual-required",
   "labels": ["type/bug", "type/enhancement", ...],
   "priority": "P0" | "P1" | "P2",
   "estimated": 1 | 2 | 3 | 5 | 8,

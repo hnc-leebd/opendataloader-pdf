@@ -8,7 +8,7 @@
     "comments": []
   },
   "expected": {
-    "action": "auto_fix",
+    "action": "fix/auto-eligible",
     "labels_include": ["type/bug"],
     "priority_in": ["P1", "P2"]
   }

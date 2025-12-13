@@ -67,7 +67,7 @@ A test framework for validating AI Issue workflow decisions.
     "comments": []
   },
   "expected": {
-    "action": "auto_fix",
+    "action": "fix/auto-eligible",
     "labels_include": ["type/bug", "fix/auto-eligible"],
     "labels_exclude": ["fix/manual-required"],
     "priority_in": ["P2"],
@@ -81,7 +81,7 @@ A test framework for validating AI Issue workflow decisions.
 | Field | Validation Method | Example |
 |-------|-------------------|---------|
 | `decision` | Exact match | `"decision": "valid"` |
-| `action` | Exact match | `"action": "auto_fix"` |
+| `action` | Exact match | `"action": "fix/auto-eligible"` |
 | `duplicate_of` | null or specific value | `"duplicate_of": null` |
 | `reason_contains` | Keywords in reason string | `["spam", "gibberish"]` |
 | `labels_include` | Labels present in output | `["type/bug"]` |
@@ -104,8 +104,8 @@ A test framework for validating AI Issue workflow decisions.
 
 | Category | Expected Result | Example Cases |
 |----------|----------------|---------------|
-| **Auto-fix Eligible** | `action: "auto_fix"` | Typo fix, type error, lint error, simple bug |
-| **Manual Required** | `action: "assign"` | Architecture change, security-related, UX decision needed |
+| **Auto-fix Eligible** | `action: "fix/auto-eligible"` | Typo fix, type error, lint error, simple bug |
+| **Manual Required** | `action: "fix/manual-required"` | Architecture change, security-related, UX decision needed |
 
 ## Test Runner Logic
 
@@ -203,8 +203,8 @@ Stage 1: Triage
 
 Stage 2: Analyze
 ----------------------------------------
-✓ auto-fix-simple-bug.json (action: auto_fix) [45s]
-✓ manual-architecture.json (action: assign) [52s]
+✓ auto-fix-simple-bug.json (action: fix/auto-eligible) [45s]
+✓ manual-architecture.json (action: fix/manual-required) [52s]
 
 ========================================
 ✓ All tests passed: 5/6

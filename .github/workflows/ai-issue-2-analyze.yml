@@ -172,7 +172,7 @@ jobs:
           fi
 
           # Determine action badge
-          if [ "$ACTION" = "auto_fix" ]; then
+          if [ "$ACTION" = "fix/auto-eligible" ]; then
             ACTION_BADGE="🤖 **Auto-fix eligible** - Stage 3 can attempt automatic fix"
           else
             ACTION_BADGE="👤 **Manual fix required** - Assigned for human implementation"
@@ -253,9 +253,11 @@ jobs:
           # Add priority label (priority/P0, priority/P1, priority/P2)
           LABEL_ARGS="$LABEL_ARGS --add-label \"priority/$PRIORITY\""
 
-          # Add fix/auto-eligible label if applicable
-          if [ "$ACTION" = "auto_fix" ]; then
+          # Add fix status label based on action
+          if [ "$ACTION" = "fix/auto-eligible" ]; then
             LABEL_ARGS="$LABEL_ARGS --add-label \"fix/auto-eligible\""
+          else
+            LABEL_ARGS="$LABEL_ARGS --add-label \"fix/manual-required\""
           fi
 
           # Add ai-issue/analyzed label
@@ -264,7 +266,7 @@ jobs:
           eval gh issue edit $ISSUE_NUM $LABEL_ARGS
 
       - name: Log Stage 3 eligibility
-        if: steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'auto_fix'
+        if: steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'fix/auto-eligible'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

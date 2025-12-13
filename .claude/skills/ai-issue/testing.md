@@ -150,7 +150,7 @@ on:
     paths:
       - '.github/workflows/ai-issue-*.yml'
       - '.github/scripts/ai-issue/**'
-      - '.claude/skills/workflows-ai-issue/**'
+      - '.claude/skills/ai-issue/**'
   workflow_dispatch:
 
 jobs:

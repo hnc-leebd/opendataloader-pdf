@@ -1,5 +1,5 @@
 ---
-name: workflows-ai-issue
+name: ai-issue
 description: Automatically process GitHub issues using AI analysis. Validates issues, determines priority, assigns labels, routes to assignees, and decides auto-fix eligibility. Use when processing, categorizing, or routing GitHub issues.
 ---
 

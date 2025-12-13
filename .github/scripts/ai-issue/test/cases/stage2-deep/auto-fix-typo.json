@@ -4,7 +4,7 @@
   "input": {
     "title": "Typo in error message: 'Invlaid' instead of 'Invalid'",
     "body": "In the error handling code, there's a typo in the error message.\n\nCurrent: \"Invlaid PDF format\"\nExpected: \"Invalid PDF format\"\n\nThis appears in the PdfProcessor.java file around line 150.",
-    "labels": ["triage/valid", "triage/quick"],
+    "labels": ["ai-issue/valid", "ai-issue/triaged"],
     "comments": []
   },
   "expected": {

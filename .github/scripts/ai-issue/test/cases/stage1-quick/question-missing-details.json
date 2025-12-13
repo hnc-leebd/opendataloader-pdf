@@ -6,7 +6,7 @@
     "body": "I tried using this library but it doesn't work. Please help."
   },
   "expected": {
-    "decision": "triage/needs-info",
+    "decision": "ai-issue/needs-info",
     "questions_min_count": 1
   }
 }

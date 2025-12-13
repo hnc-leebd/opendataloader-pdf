@@ -1,4 +1,4 @@
-name: "Stage 2: Deep Triage"
+name: "AI Issue: Stage 2 - Analyze"
 
 on:
   issues:
@@ -16,7 +16,7 @@ env:
   DAILY_LIMIT: 5
 
 jobs:
-  deep-triage:
+  analyze:
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -25,12 +25,12 @@ jobs:
 
     # Run when:
     # 1. workflow_dispatch (manual)
-    # 2. triage/valid label added (from Stage 1)
-    # 3. comment on issue with triage/needs-info label (user responded)
+    # 2. ai-issue/valid label added (from Stage 1)
+    # 3. comment on issue with ai-issue/needs-info label (user responded)
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issues' && github.event.label.name == 'triage/valid') ||
-      (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'triage/needs-info'))
+      (github.event_name == 'issues' && github.event.label.name == 'ai-issue/valid') ||
+      (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'ai-issue/needs-info'))
 
     steps:
       - name: Check preconditions
@@ -51,7 +51,7 @@ jobs:
           # Check daily limit
           TODAY=$(date -u +%Y-%m-%d)
           COUNT=$(gh api \
-            "/repos/${{ github.repository }}/actions/workflows/ai-triage-2-deep.yml/runs?status=success&created=>=$TODAY" \
+            "/repos/${{ github.repository }}/actions/workflows/ai-issue-2-analyze.yml/runs?status=success&created=>=$TODAY" \
             --jq '.total_count')
 
           echo "Today's runs: $COUNT / $DAILY_LIMIT"
@@ -61,18 +61,18 @@ jobs:
             exit 0
           fi
 
-          # Check if already deep-triaged
+          # Check if already analyzed
           LABELS=$(gh issue view $ISSUE_NUM --repo ${{ github.repository }} --json labels --jq '.labels[].name')
-          if echo "$LABELS" | grep -q "triage/deep"; then
+          if echo "$LABELS" | grep -q "ai-issue/analyzed"; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Already deep-triaged" >> $GITHUB_OUTPUT
+            echo "reason=Already analyzed" >> $GITHUB_OUTPUT
             exit 0
           fi
 
           # Check if valid or needs-info (passed Stage 1)
-          if ! echo "$LABELS" | grep -qE "triage/valid|triage/needs-info"; then
+          if ! echo "$LABELS" | grep -qE "ai-issue/valid|ai-issue/needs-info"; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Issue not marked as triage/valid or triage/needs-info (Stage 1 not passed)" >> $GITHUB_OUTPUT
+            echo "reason=Issue not marked as ai-issue/valid or ai-issue/needs-info (Stage 1 not passed)" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -103,7 +103,7 @@ jobs:
           # Get full issue details
           gh issue view $ISSUE_NUM --json title,body,labels,comments > /tmp/issue.json
 
-      - name: Run Claude Code - Analysis
+      - name: Run analysis
         if: steps.check.outputs.skip != 'true'
         id: analysis
         timeout-minutes: 15
@@ -113,17 +113,17 @@ jobs:
           ISSUE_NUM=${{ steps.check.outputs.issue_number }}
 
           # Build prompt using shared script
-          .github/scripts/triage/build-stage2-prompt.sh "$ISSUE_NUM" "/tmp/issue.json" > /tmp/analysis_prompt.txt
+          .github/scripts/ai-issue/build-stage2-prompt.sh "$ISSUE_NUM" "/tmp/issue.json" > /tmp/analysis_prompt.txt
 
           # Run Claude Code CLI using shared script
-          RESULT=$(.github/scripts/triage/call-claude-code.sh /tmp/analysis_prompt.txt "Read,Glob,Grep")
+          RESULT=$(.github/scripts/ai-issue/call-claude-code.sh /tmp/analysis_prompt.txt "Read,Glob,Grep")
 
           echo "=== Analysis Result ==="
           echo "$RESULT"
           echo "======================="
 
           # Parse response using shared script (writes files to /tmp)
-          PARSED=$(echo "$RESULT" | .github/scripts/triage/parse-stage2-response.sh /tmp)
+          PARSED=$(echo "$RESULT" | .github/scripts/ai-issue/parse-stage2-response.sh /tmp)
 
           echo "=== Parsed Result ==="
           echo "$PARSED"
@@ -132,7 +132,7 @@ jobs:
           # Output to GitHub Actions
           echo "$PARSED" >> $GITHUB_OUTPUT
 
-      - name: Post Analysis Comment
+      - name: Post analysis comment
         if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -227,7 +227,7 @@ jobs:
             gh issue edit $ISSUE_NUM --add-assignee "$ASSIGNEE" || echo "Failed to assign to $ASSIGNEE"
           fi
 
-      - name: Update Labels
+      - name: Update labels
         if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -258,12 +258,12 @@ jobs:
             LABEL_ARGS="$LABEL_ARGS --add-label \"fix/auto-eligible\""
           fi
 
-          # Add triage/deep label
-          LABEL_ARGS="$LABEL_ARGS --add-label \"triage/deep\""
+          # Add ai-issue/analyzed label
+          LABEL_ARGS="$LABEL_ARGS --add-label \"ai-issue/analyzed\""
 
           eval gh issue edit $ISSUE_NUM $LABEL_ARGS
 
-      - name: Trigger Stage 3 (if auto-fixable)
+      - name: Log Stage 3 eligibility
         if: steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'auto_fix'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -272,4 +272,4 @@ jobs:
 
           echo "✅ Issue #$ISSUE_NUM is eligible for auto-fix"
           echo "Has fix/auto-eligible label - Stage 3 can be triggered manually:"
-          echo "  gh workflow run ai-triage-3-fix.yml -f issue_number=$ISSUE_NUM"
+          echo "  gh workflow run ai-issue-3-fix.yml -f issue_number=$ISSUE_NUM"

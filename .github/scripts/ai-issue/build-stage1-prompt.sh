@@ -53,16 +53,16 @@ Body: $ISSUE_BODY
 
 ## Decision Required
 Based ONLY on the README and issue list above, determine:
-1. Is this SPAM or OUT OF SCOPE? (ads, gibberish, abuse, unrelated to project) → "triage/invalid"
-2. Is this a DUPLICATE? (very similar to existing issue) → "triage/duplicate"
-3. Is this UNCLEAR? (missing reproduction steps, environment, or details) → "triage/needs-info"
-4. Otherwise → "triage/valid"
+1. Is this SPAM or OUT OF SCOPE? (ads, gibberish, abuse, unrelated to project) → "invalid"
+2. Is this a DUPLICATE? (very similar to existing issue) → "duplicate"
+3. Is this UNCLEAR? (missing reproduction steps, environment, or details) → "needs-info"
+4. Otherwise → "valid"
 
 Respond with JSON only:
 {
-  "decision": "triage/invalid" | "triage/duplicate" | "triage/needs-info" | "triage/valid",
+  "decision": "invalid" | "duplicate" | "needs-info" | "valid",
   "duplicate_of": <issue number or null>,
   "reason": "one sentence explanation",
-  "questions": ["question1", ...] // only if decision is "triage/needs-info"
+  "questions": ["question1", ...] // only if decision is "needs-info"
 }
 PROMPT_EOF

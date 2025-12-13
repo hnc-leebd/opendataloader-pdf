@@ -1,5 +1,5 @@
 #!/bin/bash
-# AI Triage Test Runner
+# AI Issue Test Runner
 # Usage: ./run-tests.sh [--stage=1|2|all] [--case=<name>] [--dry-run] [--verbose]
 #
 # This script can be used both locally and in GitHub Actions
@@ -8,7 +8,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TRIAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+AI_ISSUE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FIXTURES_DIR="$SCRIPT_DIR/fixtures"
 CASES_DIR="$SCRIPT_DIR/cases"
 
@@ -82,7 +82,7 @@ run_stage1_test() {
   if $DRY_RUN; then
     # Just show the prompt
     log_info "  [DRY-RUN] Would test: $case_name"
-    "$TRIAGE_DIR/build-stage1-prompt.sh" "999" "$title" "$body" \
+    "$AI_ISSUE_DIR/build-stage1-prompt.sh" "999" "$title" "$body" \
       "$FIXTURES_DIR/readme-excerpt.txt" "$FIXTURES_DIR/existing-issues.txt" | head -20
     echo "..."
     return 0
@@ -93,10 +93,10 @@ run_stage1_test() {
 
   # Build and run
   local prompt_file=$(mktemp)
-  "$TRIAGE_DIR/build-stage1-prompt.sh" "999" "$title" "$body" \
+  "$AI_ISSUE_DIR/build-stage1-prompt.sh" "999" "$title" "$body" \
     "$FIXTURES_DIR/readme-excerpt.txt" "$FIXTURES_DIR/existing-issues.txt" > "$prompt_file"
 
-  local response=$("$TRIAGE_DIR/call-claude-api.sh" "$prompt_file")
+  local response=$("$AI_ISSUE_DIR/call-claude-api.sh" "$prompt_file")
   rm -f "$prompt_file"
 
   # Calculate elapsed time
@@ -108,16 +108,16 @@ run_stage1_test() {
   fi
 
   # Parse response
-  local parsed=$(echo "$response" | "$TRIAGE_DIR/parse-stage1-response.sh")
+  local parsed=$(echo "$response" | "$AI_ISSUE_DIR/parse-stage1-response.sh")
   local actual_decision=$(echo "$parsed" | grep "^decision=" | cut -d= -f2)
   local actual_duplicate=$(echo "$parsed" | grep "^duplicate_of=" | cut -d= -f2)
 
   # Normalize expected decision to new label format
   case "$expected_decision" in
-    "invalid") expected_decision="triage/invalid" ;;
-    "duplicate") expected_decision="triage/duplicate" ;;
-    "question") expected_decision="triage/needs-info" ;;
-    "valid") expected_decision="triage/valid" ;;
+    "invalid"|"triage/invalid") expected_decision="ai-issue/invalid" ;;
+    "duplicate"|"triage/duplicate") expected_decision="ai-issue/duplicate" ;;
+    "question"|"needs-info"|"triage/needs-info") expected_decision="ai-issue/needs-info" ;;
+    "valid"|"triage/valid") expected_decision="ai-issue/valid" ;;
   esac
 
   # Check result
@@ -162,7 +162,7 @@ run_stage2_test() {
       labels: [.input.labels[] | {name: .}],
       comments: [.input.comments[] | {author: {login: .author}, body: .body}]
     }' "$case_file" > "$issue_json_file"
-    "$TRIAGE_DIR/build-stage2-prompt.sh" "999" "$issue_json_file" | head -20
+    "$AI_ISSUE_DIR/build-stage2-prompt.sh" "999" "$issue_json_file" | head -20
     echo "..."
     rm -f "$issue_json_file"
     return 0
@@ -182,9 +182,9 @@ run_stage2_test() {
 
   # Build and run using Claude Code CLI (same as workflow)
   local prompt_file=$(mktemp)
-  "$TRIAGE_DIR/build-stage2-prompt.sh" "999" "$issue_json_file" > "$prompt_file"
+  "$AI_ISSUE_DIR/build-stage2-prompt.sh" "999" "$issue_json_file" > "$prompt_file"
 
-  local response=$("$TRIAGE_DIR/call-claude-code.sh" "$prompt_file" "Read,Glob,Grep")
+  local response=$("$AI_ISSUE_DIR/call-claude-code.sh" "$prompt_file" "Read,Glob,Grep")
   rm -f "$prompt_file" "$issue_json_file"
 
   # Calculate elapsed time
@@ -197,7 +197,7 @@ run_stage2_test() {
 
   # Parse response using shared script
   local output_dir=$(mktemp -d)
-  local parsed=$(echo "$response" | "$TRIAGE_DIR/parse-stage2-response.sh" "$output_dir")
+  local parsed=$(echo "$response" | "$AI_ISSUE_DIR/parse-stage2-response.sh" "$output_dir")
   local actual_action=$(echo "$parsed" | grep "^action=" | cut -d= -f2)
   rm -rf "$output_dir"
 
@@ -214,7 +214,7 @@ run_stage2_test() {
 
 # Main
 echo "========================================"
-echo "AI Triage Test Runner"
+echo "AI Issue Test Runner"
 echo "========================================"
 echo ""
 
@@ -226,7 +226,7 @@ fi
 
 # Run Stage 1 tests
 if [ "$STAGE_FILTER" = "all" ] || [ "$STAGE_FILTER" = "1" ]; then
-  echo "Stage 1: Quick Triage"
+  echo "Stage 1: Triage"
   echo "----------------------------------------"
 
   for case_file in "$CASES_DIR/stage1-quick"/*.json; do
@@ -240,7 +240,7 @@ fi
 
 # Run Stage 2 tests
 if [ "$STAGE_FILTER" = "all" ] || [ "$STAGE_FILTER" = "2" ]; then
-  echo "Stage 2: Deep Triage"
+  echo "Stage 2: Analyze"
   echo "----------------------------------------"
 
   for case_file in "$CASES_DIR/stage2-deep"/*.json; do

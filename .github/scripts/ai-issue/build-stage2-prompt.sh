@@ -14,7 +14,7 @@ ISSUE_JSON_FILE="${2:-}"
 # Find script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-SKILL_DIR="$ROOT_DIR/.claude/skills/workflows-ai-triage"
+SKILL_DIR="$ROOT_DIR/.claude/skills/workflows-ai-issue"
 
 # Read issue JSON
 if [ -n "$ISSUE_JSON_FILE" ] && [ -f "$ISSUE_JSON_FILE" ]; then
@@ -42,14 +42,14 @@ fi
 
 # Build prompt
 cat <<PROMPT_EOF
-Perform deep triage for GitHub issue #$ISSUE_NUM using the workflows-ai-triage skill.
+Perform deep analysis for GitHub issue #$ISSUE_NUM using the workflows-ai-issue skill.
 
 ## Issue Details
 $ISSUE_JSON
 
 ## Instructions
-Use the workflows-ai-triage skill to:
-1. Read the skill files in .claude/skills/workflows-ai-triage/ for policies and criteria
+Use the workflows-ai-issue skill to:
+1. Read the skill files in .claude/skills/workflows-ai-issue/ for policies and criteria
 2. **Analyze the codebase** to understand:
    - What the issue is about
    - Which files/components are involved

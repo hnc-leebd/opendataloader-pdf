@@ -1,4 +1,4 @@
-name: "Stage 1: Quick Triage"
+name: "AI Issue: Stage 1 - Triage"
 
 on:
   issues:
@@ -14,7 +14,7 @@ env:
   DAILY_LIMIT: 20  # Triage limit per day
 
 jobs:
-  quick-triage:
+  triage:
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -23,7 +23,7 @@ jobs:
 
     if: |
       github.event_name == 'workflow_dispatch' ||
-      !contains(github.event.issue.labels.*.name, 'triage/quick')
+      !contains(github.event.issue.labels.*.name, 'ai-issue/triaged')
 
     steps:
       - name: Check daily limit
@@ -35,7 +35,7 @@ jobs:
           TODAY=$(date -u +%Y-%m-%d)
 
           COUNT=$(gh api \
-            "/repos/${{ github.repository }}/actions/workflows/ai-1-quick-triage.yml/runs?status=success&created=>=$TODAY" \
+            "/repos/${{ github.repository }}/actions/workflows/ai-issue-1-triage.yml/runs?status=success&created=>=$TODAY" \
             --jq '.total_count')
 
           echo "Today's runs: $COUNT / $DAILY_LIMIT"
@@ -53,7 +53,7 @@ jobs:
         with:
           sparse-checkout: |
             README.md
-            .github/scripts/triage
+            .github/scripts/ai-issue
           sparse-checkout-cone-mode: false
 
       - name: Gather context
@@ -83,7 +83,7 @@ jobs:
             --jq ".[] | select(.number != $ISSUE_NUM) | \"#\\(.number) \\(.title)\"" \
             > /tmp/issues.txt
 
-      - name: Triage
+      - name: Run triage
         if: steps.limit.outputs.exceeded != 'true'
         id: triage
         env:
@@ -91,7 +91,7 @@ jobs:
         run: |
           # Build prompt using shared script
           ISSUE_NUM="${{ github.event.issue.number || inputs.issue_number }}"
-          .github/scripts/triage/build-stage1-prompt.sh \
+          .github/scripts/ai-issue/build-stage1-prompt.sh \
             "$ISSUE_NUM" \
             "${{ steps.context.outputs.title }}" \
             "${{ steps.context.outputs.body }}" \
@@ -99,14 +99,14 @@ jobs:
             "/tmp/issues.txt" > /tmp/triage_prompt.txt
 
           # Call API using shared script
-          RESPONSE=$(.github/scripts/triage/call-claude-api.sh /tmp/triage_prompt.txt "claude-sonnet-4-5-20250514" 256)
+          RESPONSE=$(.github/scripts/ai-issue/call-claude-api.sh /tmp/triage_prompt.txt "claude-sonnet-4-5-20250514" 256)
 
           echo "=== LLM Response ==="
           echo "$RESPONSE"
           echo "===================="
 
           # Parse response using shared script
-          PARSED=$(echo "$RESPONSE" | .github/scripts/triage/parse-stage1-response.sh)
+          PARSED=$(echo "$RESPONSE" | .github/scripts/ai-issue/parse-stage1-response.sh)
 
           echo "=== Parsed Result ==="
           echo "$PARSED"
@@ -115,8 +115,8 @@ jobs:
           # Output to GitHub Actions
           echo "$PARSED" >> $GITHUB_OUTPUT
 
-      - name: "Close: Invalid"
-        if: steps.triage.outputs.decision == 'triage/invalid'
+      - name: "Result: Close as invalid"
+        if: steps.triage.outputs.decision == 'ai-issue/invalid'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REASON: ${{ steps.triage.outputs.reason }}
@@ -139,10 +139,10 @@ jobs:
             --reason "not planned" \
             --comment "$COMMENT"
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "triage/quick,triage/invalid"
+            --add-label "ai-issue/triaged,ai-issue/invalid"
 
-      - name: "Close: Duplicate"
-        if: steps.triage.outputs.decision == 'triage/duplicate'
+      - name: "Result: Close as duplicate"
+        if: steps.triage.outputs.decision == 'ai-issue/duplicate'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -175,10 +175,10 @@ jobs:
             --reason "not planned" \
             --comment "$COMMENT"
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "triage/quick,triage/duplicate"
+            --add-label "ai-issue/triaged,ai-issue/duplicate"
 
-      - name: "Request: Clarification"
-        if: steps.triage.outputs.decision == 'triage/needs-info'
+      - name: "Result: Request more info"
+        if: steps.triage.outputs.decision == 'ai-issue/needs-info'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           QUESTIONS: ${{ steps.triage.outputs.questions }}
@@ -203,15 +203,15 @@ jobs:
           gh issue comment ${{ github.event.issue.number || inputs.issue_number }} \
             --body "$COMMENT"
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "triage/quick,triage/needs-info"
+            --add-label "ai-issue/triaged,ai-issue/needs-info"
 
-      - name: "Pass: Valid"
-        if: steps.triage.outputs.decision == 'triage/valid'
+      - name: "Result: Pass to Stage 2"
+        if: steps.triage.outputs.decision == 'ai-issue/valid'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "triage/quick,triage/valid"
+            --add-label "ai-issue/triaged,ai-issue/valid"
 
-          echo "✓ Issue passed quick triage: ${{ steps.triage.outputs.reason }}"
-          echo "Stage 2 will be triggered automatically by the triage/valid label"
+          echo "✓ Issue passed triage: ${{ steps.triage.outputs.reason }}"
+          echo "Stage 2 will be triggered automatically by the ai-issue/valid label"

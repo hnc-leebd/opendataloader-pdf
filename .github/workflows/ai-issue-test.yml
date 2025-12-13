@@ -1,11 +1,11 @@
-name: "AI Triage Tests"
+name: "AI Issue: Tests"
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/ai-triage-*.yml'
-      - '.github/scripts/triage/**'
-      - '.claude/skills/workflows-ai-triage/**'
+      - '.github/workflows/ai-issue-*.yml'
+      - '.github/scripts/ai-issue/**'
+      - '.claude/skills/workflows-ai-issue/**'
   workflow_dispatch:
     inputs:
       stage:
@@ -31,7 +31,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run AI Triage Tests
+      - name: Run tests
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -46,4 +46,4 @@ jobs:
             ARGS="$ARGS --dry-run"
           fi
 
-          .github/scripts/triage/test/run-tests.sh $ARGS
+          .github/scripts/ai-issue/test/run-tests.sh $ARGS

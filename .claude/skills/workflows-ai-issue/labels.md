@@ -2,22 +2,22 @@
 
 All labels use `/` prefix for grouping in GitHub UI.
 
-## Triage Status Labels
+## Stage Status Labels
 
 | Label | Color | Description | Set By |
 |-------|-------|-------------|--------|
-| `triage/quick` | `#FBCA04` (yellow) | Stage 1 completed | Stage 1 |
-| `triage/deep` | `#D93F0B` (orange) | Stage 2 completed | Stage 2 |
-| `triage/fixed` | `#0E8A16` (green) | Stage 3 completed (PR created) | Stage 3 |
+| `ai-issue/triaged` | `#FBCA04` (yellow) | Stage 1 (Triage) completed | Stage 1 |
+| `ai-issue/analyzed` | `#D93F0B` (orange) | Stage 2 (Analyze) completed | Stage 2 |
+| `ai-issue/fixed` | `#0E8A16` (green) | Stage 3 (Fix) completed (PR created) | Stage 3 |
 
 ## Triage Result Labels
 
 | Label | Color | Description | Set By |
 |-------|-------|-------------|--------|
-| `triage/valid` | `#0E8A16` (green) | Valid issue, proceed to Stage 2 | Stage 1 |
-| `triage/invalid` | `#666666` (gray) | Out of scope or spam | Stage 1 |
-| `triage/duplicate` | `#CFD3D7` (light gray) | Duplicate of existing issue | Stage 1 |
-| `triage/question` | `#D876E3` (purple) | Needs more information | Stage 1 |
+| `ai-issue/valid` | `#0E8A16` (green) | Valid issue, proceed to Stage 2 | Stage 1 |
+| `ai-issue/invalid` | `#666666` (gray) | Out of scope or spam | Stage 1 |
+| `ai-issue/duplicate` | `#CFD3D7` (light gray) | Duplicate of existing issue | Stage 1 |
+| `ai-issue/needs-info` | `#D876E3` (purple) | Needs more information | Stage 1 |
 
 ## Fix Status Labels
 
@@ -50,25 +50,25 @@ New Issue
     │
     ▼
 ┌──────────────────────────────────────────────────────────┐
-│ Stage 1: Quick Triage                                    │
-│ Adds: triage/quick + ONE OF:                             │
-│   - triage/valid    → triggers Stage 2                   │
-│   - triage/invalid  → closes issue                       │
-│   - triage/duplicate → closes issue                      │
-│   - triage/question → waits for user response            │
+│ Stage 1: Triage                                          │
+│ Adds: ai-issue/triaged + ONE OF:                         │
+│   - ai-issue/valid     → triggers Stage 2                │
+│   - ai-issue/invalid   → closes issue                    │
+│   - ai-issue/duplicate → closes issue                    │
+│   - ai-issue/needs-info → waits for user response        │
 └──────────────────────────────────────────────────────────┘
-    │ (triage/valid)              │ (triage/question + user comment)
-    ▼                             ▼
+    │ (ai-issue/valid)          │ (ai-issue/needs-info + user comment)
+    ▼                           ▼
 ┌──────────────────────────────────────────────────────────┐
-│ Stage 2: Deep Triage                                     │
-│ Adds: triage/deep + type/* + priority/* +                │
+│ Stage 2: Analyze                                         │
+│ Adds: ai-issue/analyzed + type/* + priority/* +          │
 │   - fix/auto-eligible (if auto-fixable)                  │
 └──────────────────────────────────────────────────────────┘
     │ (fix/auto-eligible + manual trigger)
     ▼
 ┌──────────────────────────────────────────────────────────┐
-│ Stage 3: Auto Fix (workflow_dispatch only)               │
-│ On success: triage/fixed + PR created                    │
+│ Stage 3: Fix (workflow_dispatch only)                    │
+│ On success: ai-issue/fixed + PR created                  │
 │ On failure: removes fix/auto-eligible,                   │
 │             adds fix/manual-required                     │
 └──────────────────────────────────────────────────────────┘
@@ -79,5 +79,5 @@ New Issue
 | Stage | Trigger |
 |-------|---------|
 | Stage 1 | `on: issues: opened` or `workflow_dispatch` |
-| Stage 2 | `on: issues: labeled` (triage/valid) or `on: issue_comment: created` (has triage/question) or `workflow_dispatch` |
+| Stage 2 | `on: issues: labeled` (ai-issue/valid) or `on: issue_comment: created` (has ai-issue/needs-info) or `workflow_dispatch` |
 | Stage 3 | `workflow_dispatch` only (manual trigger required) |

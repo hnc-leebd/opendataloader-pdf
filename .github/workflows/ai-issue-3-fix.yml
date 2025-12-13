@@ -1,4 +1,4 @@
-name: "Stage 3: Auto Fix"
+name: "AI Issue: Stage 3 - Fix"
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ env:
   DAILY_LIMIT: 3
 
 jobs:
-  auto-fix:
+  fix:
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -31,7 +31,7 @@ jobs:
           # Check daily limit
           TODAY=$(date -u +%Y-%m-%d)
           COUNT=$(gh api \
-            "/repos/${{ github.repository }}/actions/workflows/ai-triage-3-fix.yml/runs?status=success&created=>=$TODAY" \
+            "/repos/${{ github.repository }}/actions/workflows/ai-issue-3-fix.yml/runs?status=success&created=>=$TODAY" \
             --jq '.total_count')
 
           echo "Today's runs: $COUNT / $DAILY_LIMIT"
@@ -51,17 +51,17 @@ jobs:
             exit 0
           fi
 
-          # Must have triage/deep label
-          if ! echo "$LABELS" | grep -q "triage/deep"; then
+          # Must have ai-issue/analyzed label
+          if ! echo "$LABELS" | grep -q "ai-issue/analyzed"; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Issue not deep-triaged (Stage 2 not completed)" >> $GITHUB_OUTPUT
+            echo "reason=Issue not analyzed (Stage 2 not completed)" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # Check if already fixed (has triage/fixed label)
-          if echo "$LABELS" | grep -q "triage/fixed"; then
+          # Check if already fixed (has ai-issue/fixed label)
+          if echo "$LABELS" | grep -q "ai-issue/fixed"; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Issue already has triage/fixed label" >> $GITHUB_OUTPUT
+            echo "reason=Issue already has ai-issue/fixed label" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -103,7 +103,7 @@ jobs:
           # This includes AI Deep Analysis and any follow-up Q&A from humans
           cat /tmp/issue.json | jq -r '.comments[] | "### Comment by \(.author.login):\n\(.body)\n"' > /tmp/all_comments.txt || true
 
-      - name: Run Claude Code - Fix
+      - name: Run fix
         if: steps.check.outputs.skip != 'true'
         id: fix
         timeout-minutes: 30
@@ -211,7 +211,7 @@ jobs:
             echo "fail_reason=No changes were made" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create Pull Request
+      - name: Create pull request
         if: steps.check.outputs.skip != 'true' && steps.fix.outputs.success == 'true'
         id: pr
         env:
@@ -269,7 +269,7 @@ jobs:
 
           echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
 
-      - name: Post Success Comment
+      - name: "Result: Success"
         if: steps.check.outputs.skip != 'true' && steps.fix.outputs.success == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -293,10 +293,10 @@ jobs:
 
           gh issue comment $ISSUE_NUM --body "$COMMENT"
 
-          # Add triage/fixed label
-          gh issue edit $ISSUE_NUM --add-label "triage/fixed"
+          # Add ai-issue/fixed label
+          gh issue edit $ISSUE_NUM --add-label "ai-issue/fixed"
 
-      - name: Post Failure Comment
+      - name: "Result: Failure"
         if: steps.check.outputs.skip != 'true' && steps.fix.outputs.success != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,6 +1,6 @@
-# AI Triage System
+# AI Issue System
 
-## Stage 1: Quick Triage (README-Based)
+## Stage 1: Triage (README-Based)
 
 **Trigger:** `on: issues: opened` or `workflow_dispatch`
 
@@ -13,18 +13,18 @@
 - Is it clear enough?
 
 **Outcomes:**
-- Invalid → auto-close, add `triage/quick` + `triage/invalid`
-- Duplicate → link original, close, add `triage/quick` + `triage/duplicate`
-- Unclear → ask clarifying question, add `triage/quick` + `triage/question`
-- Valid → add `triage/quick` + `triage/valid` → **triggers Stage 2**
+- Invalid → auto-close, add `ai-issue/triaged` + `ai-issue/invalid`
+- Duplicate → link original, close, add `ai-issue/triaged` + `ai-issue/duplicate`
+- Unclear → ask clarifying question, add `ai-issue/triaged` + `ai-issue/needs-info`
+- Valid → add `ai-issue/triaged` + `ai-issue/valid` → **triggers Stage 2**
 
 ---
 
-## Stage 2: Deep Triage (Code-Based Analysis)
+## Stage 2: Analyze (Code-Based Analysis)
 
 **Trigger:**
-- `on: issues: labeled` (when `triage/valid` is added)
-- `on: issue_comment: created` (when issue has `triage/question` label)
+- `on: issues: labeled` (when `ai-issue/valid` is added)
+- `on: issue_comment: created` (when issue has `ai-issue/needs-info` label)
 - `workflow_dispatch`
 
 **Goal:** Analyze the issue deeply and document findings for humans and AI.
@@ -42,11 +42,11 @@
   - Affected files
   - Root cause (if identifiable)
   - Suggested approach
-- Labels: `type/*`, `priority/*`, `fix/auto-eligible` (if applicable)
+- Labels: `ai-issue/analyzed`, `type/*`, `priority/*`, `fix/auto-eligible` (if applicable)
 - Assignee recommendation
 
 **Outcomes:**
-- Add `triage/deep` + type/priority labels
+- Add `ai-issue/analyzed` + type/priority labels
 - If auto-fixable: add `fix/auto-eligible` (Stage 3 can be triggered manually)
 - If not auto-fixable: assigned for manual implementation
 
@@ -56,12 +56,12 @@
 ┌─────────────────────────────────────────────────────────────┐
 │  Check Preconditions                                        │
 │  - Daily limit (5 runs)                                     │
-│  - Already triage/deep?                                     │
-│  - Has triage/valid or triage/question label?               │
+│  - Already ai-issue/analyzed?                               │
+│  - Has ai-issue/valid or ai-issue/needs-info label?         │
 └─────────────────────┬───────────────────────────────────────┘
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Claude Code - Deep Analysis (15min timeout)                │
+│  Claude Code - Analysis (15min timeout)                     │
 │  - Read skill files for policies                            │
 │  - Analyze codebase (Glob, Grep, Read)                      │
 │  - Identify affected files and root cause                   │
@@ -82,13 +82,13 @@
 │  - Add type/* labels                                        │
 │  - Add priority/* label                                     │
 │  - Add fix/auto-eligible if eligible                        │
-│  - Add triage/deep label                                    │
+│  - Add ai-issue/analyzed label                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Stage 3: Auto Fix (Manual Trigger Only)
+## Stage 3: Fix (Manual Trigger Only)
 
 **Trigger:** `workflow_dispatch` only (requires human approval)
 
@@ -96,8 +96,8 @@
 
 **Preconditions:**
 - Has `fix/auto-eligible` label (from Stage 2)
-- Has `triage/deep` label
-- Does not have `triage/fixed` label
+- Has `ai-issue/analyzed` label
+- Does not have `ai-issue/fixed` label
 - Daily limit not exceeded (3 runs)
 
 **Process:**
@@ -109,7 +109,7 @@
 6. Create PR
 
 **Outcomes:**
-- Success → PR created, add `triage/fixed` label
+- Success → PR created, add `ai-issue/fixed` label
 - Failure → remove `fix/auto-eligible`, add `fix/manual-required`
 
 ### Workflow
@@ -119,8 +119,8 @@
 │  Check Preconditions                                        │
 │  - Daily limit (3 runs)                                     │
 │  - Has fix/auto-eligible label?                             │
-│  - Has triage/deep label?                                   │
-│  - Not already triage/fixed?                                │
+│  - Has ai-issue/analyzed label?                             │
+│  - Not already ai-issue/fixed?                              │
 └─────────────────────┬───────────────────────────────────────┘
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -147,8 +147,8 @@
            [Create PR] [Comment failure]
                  │         │
                  ▼         ▼
-           [Add label  [Remove fix/auto-eligible
-            triage/fixed] Add fix/manual-required]
+           [Add label      [Remove fix/auto-eligible
+            ai-issue/fixed] Add fix/manual-required]
 ```
 
 ---
@@ -160,13 +160,13 @@ New Issue
     │
     ▼
 ┌──────────────────────────────────────────────────────────┐
-│ Stage 1: Quick Triage (auto on issue open)               │
-│ Labels: triage/quick + ONE OF:                           │
-│   triage/valid | triage/invalid | triage/duplicate |     │
-│   triage/question                                        │
+│ Stage 1: Triage (auto on issue open)                     │
+│ Labels: ai-issue/triaged + ONE OF:                       │
+│   ai-issue/valid | ai-issue/invalid | ai-issue/duplicate │
+│   ai-issue/needs-info                                    │
 └──────────────────────────────────────────────────────────┘
     │                                     │
-    │ (triage/valid)                      │ (triage/question)
+    │ (ai-issue/valid)                    │ (ai-issue/needs-info)
     │                                     │
     ▼                                     ▼
 ┌─────────────────────────────┐    ┌─────────────────────────┐
@@ -181,16 +181,16 @@ New Issue
     └──────────────┬───────────────┴───────────────────────────┘
                    ▼
 ┌──────────────────────────────────────────────────────────┐
-│ Stage 2: Deep Triage (auto triggered)                    │
-│ Labels: triage/deep + type/* + priority/*                │
+│ Stage 2: Analyze (auto triggered)                        │
+│ Labels: ai-issue/analyzed + type/* + priority/*          │
 │ If auto-fixable: + fix/auto-eligible                     │
 └──────────────────────────────────────────────────────────┘
                    │
                    │ (fix/auto-eligible + MANUAL TRIGGER)
                    ▼
 ┌──────────────────────────────────────────────────────────┐
-│ Stage 3: Auto Fix (workflow_dispatch only)               │
-│ Success: triage/fixed + PR created                       │
+│ Stage 3: Fix (workflow_dispatch only)                    │
+│ Success: ai-issue/fixed + PR created                     │
 │ Failure: fix/manual-required                             │
 └──────────────────────────────────────────────────────────┘
 ```

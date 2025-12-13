@@ -1,6 +1,6 @@
-# AI Triage Testing Framework
+# AI Issue Testing Framework
 
-A test framework for validating AI Triage workflow decisions.
+A test framework for validating AI Issue workflow decisions.
 
 ## Purpose
 
@@ -11,33 +11,32 @@ A test framework for validating AI Triage workflow decisions.
 ## Directory Structure
 
 ```
-tests/
-└── ai-triage/
-    ├── runner.ts                    # Test runner
-    ├── prompt-builder.ts            # Build prompts identical to workflows
-    ├── validator.ts                 # Result validation logic
+.github/scripts/ai-issue/
+├── build-stage1-prompt.sh           # Build Stage 1 prompts
+├── build-stage2-prompt.sh           # Build Stage 2 prompts
+├── call-claude-api.sh               # Call Claude API
+├── call-claude-code.sh              # Call Claude Code CLI
+├── parse-stage1-response.sh         # Parse Stage 1 responses
+├── parse-stage2-response.sh         # Parse Stage 2 responses
+└── test/
+    ├── run-tests.sh                 # Test runner
     ├── cases/
     │   ├── stage1-quick/            # Stage 1 test cases
     │   │   ├── invalid-spam.json
-    │   │   ├── invalid-gibberish.json
-    │   │   ├── duplicate-existing.json
-    │   │   ├── question-missing-steps.json
-    │   │   ├── question-missing-env.json
-    │   │   ├── valid-bug-report.json
-    │   │   └── valid-feature-request.json
+    │   │   ├── duplicate-*.json
+    │   │   ├── question-*.json
+    │   │   └── valid-*.json
     │   └── stage2-deep/             # Stage 2 test cases
-    │       ├── auto-fix-simple-typo.json
-    │       ├── auto-fix-type-error.json
-    │       ├── manual-architecture.json
-    │       └── manual-security.json
+    │       ├── auto-fix-*.json
+    │       └── manual-*.json
     └── fixtures/
-        ├── existing-issues.json     # Existing issues for duplicate detection
+        ├── existing-issues.txt      # Existing issues for duplicate detection
         └── readme-excerpt.txt       # README excerpt
 ```
 
 ## Test Case Format
 
-### Stage 1 (Quick Triage)
+### Stage 1 (Triage)
 
 ```json
 {
@@ -55,7 +54,7 @@ tests/
 }
 ```
 
-### Stage 2 (Deep Triage)
+### Stage 2 (Analyze)
 
 ```json
 {
@@ -64,7 +63,7 @@ tests/
   "input": {
     "title": "Typo in error message",
     "body": "The error message says 'Invlaid input' instead of 'Invalid input'",
-    "labels": ["triage/valid", "triage/quick"],
+    "labels": ["ai-issue/valid", "ai-issue/triaged"],
     "comments": []
   },
   "expected": {
@@ -92,7 +91,7 @@ tests/
 
 ## Test Case Categories
 
-### Stage 1: Quick Triage
+### Stage 1: Triage
 
 | Category | Expected Result | Example Cases |
 |----------|----------------|---------------|
@@ -101,7 +100,7 @@ tests/
 | **Question** | `decision: "question"` | Missing repro steps, no environment info, unclear description |
 | **Valid** | `decision: "valid"` | Clear bug report, feature request, docs improvement |
 
-### Stage 2: Deep Triage
+### Stage 2: Analyze
 
 | Category | Expected Result | Example Cases |
 |----------|----------------|---------------|
@@ -143,15 +142,15 @@ async function runTests() {
 ## Workflow Integration
 
 ```yaml
-# .github/workflows/ai-triage-test.yml
-name: "AI Triage Tests"
+# .github/workflows/ai-issue-test.yml
+name: "AI Issue: Tests"
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/ai-triage-*.yml'
-      - '.claude/skills/workflows-ai-triage/**'
-      - 'tests/ai-triage/**'
+      - '.github/workflows/ai-issue-*.yml'
+      - '.github/scripts/ai-issue/**'
+      - '.claude/skills/workflows-ai-issue/**'
   workflow_dispatch:
 
 jobs:
@@ -159,13 +158,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install dependencies
-        run: cd tests/ai-triage && npm install
-      - name: Run AI Triage Tests
-        run: cd tests/ai-triage && npm test
+      - name: Run tests
+        run: .github/scripts/ai-issue/test/run-tests.sh
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
@@ -174,38 +168,47 @@ jobs:
 
 ```bash
 # Run all tests
-npm run test:ai-triage
+.github/scripts/ai-issue/test/run-tests.sh
 
 # Run Stage 1 only
-npm run test:ai-triage -- --stage=1
+.github/scripts/ai-issue/test/run-tests.sh --stage=1
+
+# Run Stage 2 only
+.github/scripts/ai-issue/test/run-tests.sh --stage=2
 
 # Run specific case
-npm run test:ai-triage -- --case=valid-bug-report
+.github/scripts/ai-issue/test/run-tests.sh --case=valid-bug-report
 
 # Verbose output
-npm run test:ai-triage -- --verbose
+.github/scripts/ai-issue/test/run-tests.sh --verbose
+
+# Dry run (no API calls)
+.github/scripts/ai-issue/test/run-tests.sh --dry-run
 ```
 
 ## Report Format
 
 ```
-AI Triage Test Results
-======================
+========================================
+AI Issue Test Runner
+========================================
 
-Stage 1: Quick Triage
-  ✓ invalid-spam.json (decision: invalid)
-  ✓ invalid-gibberish.json (decision: invalid)
-  ✓ duplicate-existing.json (decision: duplicate, duplicate_of: 42)
-  ✗ question-missing-steps.json
-    Expected: decision = "question"
-    Actual:   decision = "valid"
-  ✓ valid-bug-report.json (decision: valid)
+Stage 1: Triage
+----------------------------------------
+✓ invalid-spam.json (decision: ai-issue/invalid) [3s]
+✓ duplicate-table-extraction.json (decision: ai-issue/duplicate) [2s]
+✗ question-missing-steps.json [4s]
+    → Expected decision 'ai-issue/needs-info', got 'ai-issue/valid'
+✓ valid-bug-report.json (decision: ai-issue/valid) [3s]
 
-Stage 2: Deep Triage
-  ✓ auto-fix-simple-typo.json (action: auto_fix)
-  ✓ manual-architecture.json (action: assign)
+Stage 2: Analyze
+----------------------------------------
+✓ auto-fix-simple-bug.json (action: auto_fix) [45s]
+✓ manual-architecture.json (action: assign) [52s]
 
-Summary: 6/7 passed (85.7%)
+========================================
+✓ All tests passed: 5/6
+========================================
 ```
 
 ## Cost Considerations

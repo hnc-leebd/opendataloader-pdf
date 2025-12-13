@@ -3,7 +3,7 @@
 # Usage: ./parse-stage1-response.sh <response_text>
 #
 # Outputs (for GitHub Actions):
-#   decision=triage/invalid|triage/duplicate|triage/needs-info|triage/valid
+#   decision=ai-issue/invalid|ai-issue/duplicate|ai-issue/needs-info|ai-issue/valid
 #   duplicate_of=<number or empty>
 #   reason=<string>
 #   questions=<json array>
@@ -23,27 +23,27 @@ RESULT=$(echo "$RESPONSE_TEXT" | jq -c '.' 2>/dev/null || \
          echo '{}')
 
 # Extract fields
-DECISION=$(echo "$RESULT" | jq -r '.decision // "triage/valid"')
+DECISION=$(echo "$RESULT" | jq -r '.decision // "ai-issue/valid"')
 DUPLICATE_OF=$(echo "$RESULT" | jq -r '.duplicate_of // empty')
 REASON=$(echo "$RESULT" | jq -r '.reason // "Could not parse response"')
 QUESTIONS=$(echo "$RESULT" | jq -c '.questions // []')
 
 # Normalize decision to label format (for backwards compatibility)
 case "$DECISION" in
-  "invalid"|"triage/invalid")
-    DECISION="triage/invalid"
+  "invalid"|"triage/invalid"|"ai-issue/invalid")
+    DECISION="ai-issue/invalid"
     ;;
-  "duplicate"|"triage/duplicate")
-    DECISION="triage/duplicate"
+  "duplicate"|"triage/duplicate"|"ai-issue/duplicate")
+    DECISION="ai-issue/duplicate"
     ;;
-  "question"|"needs-info"|"triage/question"|"triage/needs-info")
-    DECISION="triage/needs-info"
+  "question"|"needs-info"|"triage/question"|"triage/needs-info"|"ai-issue/needs-info")
+    DECISION="ai-issue/needs-info"
     ;;
-  "valid"|"triage/valid")
-    DECISION="triage/valid"
+  "valid"|"triage/valid"|"ai-issue/valid")
+    DECISION="ai-issue/valid"
     ;;
   *)
-    DECISION="triage/valid"
+    DECISION="ai-issue/valid"
     ;;
 esac
 

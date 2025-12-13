@@ -4,7 +4,7 @@
   "input": {
     "title": "Add async/streaming support for large PDF processing",
     "body": "## Feature Request\n\nFor very large PDFs (100+ MB), we need streaming/async processing support to avoid memory issues.\n\n## Proposal\n- Add async variants of all processing methods\n- Implement streaming page-by-page processing\n- Add progress callbacks\n- Support cancellation\n\n## Use Case\nProcessing large document archives where memory is limited.",
-    "labels": ["triage/valid", "triage/quick"],
+    "labels": ["ai-issue/valid", "ai-issue/triaged"],
     "comments": []
   },
   "expected": {

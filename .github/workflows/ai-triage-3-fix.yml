@@ -44,24 +44,24 @@ jobs:
           # Check labels
           LABELS=$(gh issue view $ISSUE_NUM --repo ${{ github.repository }} --json labels --jq '.labels[].name')
 
-          # Must have auto-fixable label
-          if ! echo "$LABELS" | grep -q "auto-fixable"; then
+          # Must have fix/auto-eligible label
+          if ! echo "$LABELS" | grep -q "fix/auto-eligible"; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Issue not marked as auto-fixable (Stage 2 did not approve)" >> $GITHUB_OUTPUT
+            echo "reason=Issue not marked as fix/auto-eligible (Stage 2 did not approve)" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # Must have deep-triaged label
-          if ! echo "$LABELS" | grep -q "deep-triaged"; then
+          # Must have triage/deep label
+          if ! echo "$LABELS" | grep -q "triage/deep"; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "reason=Issue not deep-triaged (Stage 2 not completed)" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # Check if already fixed (has PR or ai-fixed label)
-          if echo "$LABELS" | grep -q "ai-fixed"; then
+          # Check if already fixed (has triage/fixed label)
+          if echo "$LABELS" | grep -q "triage/fixed"; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Issue already has ai-fixed label" >> $GITHUB_OUTPUT
+            echo "reason=Issue already has triage/fixed label" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -274,8 +274,8 @@ jobs:
 
           gh issue comment $ISSUE_NUM --body "$COMMENT"
 
-          # Add ai-fixed label
-          gh issue edit $ISSUE_NUM --add-label "ai-fixed"
+          # Add triage/fixed label
+          gh issue edit $ISSUE_NUM --add-label "triage/fixed"
 
       - name: Post Failure Comment
         if: steps.check.outputs.skip != 'true' && steps.fix.outputs.success != 'true'
@@ -301,5 +301,5 @@ jobs:
 
           gh issue comment $ISSUE_NUM --body "$COMMENT"
 
-          # Remove auto-fixable label, add needs-manual-fix
-          gh issue edit $ISSUE_NUM --remove-label "auto-fixable" --add-label "needs-manual-fix"
+          # Remove fix/auto-eligible label, add fix/manual-required
+          gh issue edit $ISSUE_NUM --remove-label "fix/auto-eligible" --add-label "fix/manual-required"

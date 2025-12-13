@@ -1,6 +1,10 @@
 name: "Stage 2: Deep Triage"
 
 on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       issue_number:
@@ -19,13 +23,30 @@ jobs:
       contents: read
       actions: read
 
+    # Run when:
+    # 1. workflow_dispatch (manual)
+    # 2. triage/valid label added (from Stage 1)
+    # 3. comment on issue with triage/question label (user responded)
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.label.name == 'triage/valid') ||
+      (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'triage/question'))
+
     steps:
       - name: Check preconditions
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          # Get issue number based on event type
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ISSUE_NUM=${{ inputs.issue_number }}
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+            ISSUE_NUM=${{ github.event.issue.number }}
+          else
+            ISSUE_NUM=${{ github.event.issue.number }}
+          fi
+          echo "issue_number=$ISSUE_NUM" >> $GITHUB_OUTPUT
 
           # Check daily limit
           TODAY=$(date -u +%Y-%m-%d)
@@ -42,16 +63,16 @@ jobs:
 
           # Check if already deep-triaged
           LABELS=$(gh issue view $ISSUE_NUM --repo ${{ github.repository }} --json labels --jq '.labels[].name')
-          if echo "$LABELS" | grep -q "deep-triaged"; then
+          if echo "$LABELS" | grep -q "triage/deep"; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "reason=Already deep-triaged" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # Check if valid (passed Stage 1)
-          if ! echo "$LABELS" | grep -q "valid"; then
+          # Check if valid or question (passed Stage 1)
+          if ! echo "$LABELS" | grep -qE "triage/valid|triage/question"; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Issue not marked as valid (Stage 1 not passed)" >> $GITHUB_OUTPUT
+            echo "reason=Issue not marked as triage/valid or triage/question (Stage 1 not passed)" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -77,7 +98,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          ISSUE_NUM=${{ steps.check.outputs.issue_number }}
 
           # Get full issue details
           gh issue view $ISSUE_NUM --json title,body,labels,comments > /tmp/issue.json
@@ -89,7 +110,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          ISSUE_NUM=${{ steps.check.outputs.issue_number }}
           ISSUE_JSON=$(cat /tmp/issue.json)
 
           # Claude Code will automatically load context from .claude/skills/workflows-ai-triage/
@@ -203,7 +224,7 @@ jobs:
           ESTIMATED: ${{ steps.analysis.outputs.estimated }}
           ACTION: ${{ steps.analysis.outputs.action }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          ISSUE_NUM=${{ steps.check.outputs.issue_number }}
 
           # Read analysis from files
           SUMMARY=$(cat /tmp/analysis_summary.txt)
@@ -297,24 +318,31 @@ jobs:
           ACTION: ${{ steps.analysis.outputs.action }}
           PRIORITY: ${{ steps.analysis.outputs.priority }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          ISSUE_NUM=${{ steps.check.outputs.issue_number }}
 
           # Build label arguments
           LABEL_ARGS=""
           for label in $(echo "$LABELS" | jq -r '.[]'); do
-            LABEL_ARGS="$LABEL_ARGS --add-label \"$label\""
+            # Convert old labels to new format (type/*)
+            case "$label" in
+              bug) LABEL_ARGS="$LABEL_ARGS --add-label \"type/bug\"" ;;
+              enhancement) LABEL_ARGS="$LABEL_ARGS --add-label \"type/enhancement\"" ;;
+              documentation) LABEL_ARGS="$LABEL_ARGS --add-label \"type/docs\"" ;;
+              dependencies) LABEL_ARGS="$LABEL_ARGS --add-label \"type/dependencies\"" ;;
+              *) LABEL_ARGS="$LABEL_ARGS --add-label \"$label\"" ;;
+            esac
           done
 
-          # Add priority label
-          LABEL_ARGS="$LABEL_ARGS --add-label \"$PRIORITY\""
+          # Add priority label (priority/P0, priority/P1, priority/P2)
+          LABEL_ARGS="$LABEL_ARGS --add-label \"priority/$PRIORITY\""
 
-          # Add auto-fixable label if applicable
+          # Add fix/auto-eligible label if applicable
           if [ "$ACTION" = "auto_fix" ]; then
-            LABEL_ARGS="$LABEL_ARGS --add-label \"auto-fixable\""
+            LABEL_ARGS="$LABEL_ARGS --add-label \"fix/auto-eligible\""
           fi
 
-          # Add deep-triaged label
-          LABEL_ARGS="$LABEL_ARGS --add-label \"deep-triaged\""
+          # Add triage/deep label
+          LABEL_ARGS="$LABEL_ARGS --add-label \"triage/deep\""
 
           eval gh issue edit $ISSUE_NUM $LABEL_ARGS
 
@@ -323,11 +351,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          ISSUE_NUM=${{ steps.check.outputs.issue_number }}
 
           echo "✅ Issue #$ISSUE_NUM is eligible for auto-fix"
-          echo "To trigger Stage 3, run:"
+          echo "Has fix/auto-eligible label - Stage 3 can be triggered manually:"
           echo "  gh workflow run ai-triage-3-fix.yml -f issue_number=$ISSUE_NUM"
-
-          # Uncomment to auto-trigger Stage 3:
-          # gh workflow run ai-triage-3-fix.yml -f issue_number=$ISSUE_NUM

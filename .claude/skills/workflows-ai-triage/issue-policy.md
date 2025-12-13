@@ -1,27 +1,19 @@
 # Issue Policy
 
-## Labels
+## Type Labels
 (choose ONE OR MORE from the list below):
 
-- enhancement
-- bug
-- dependencies
-- documentation
-- duplicate
-- good first issue
-- help wanted
-- invalid
-- question
-- wontfix
+- type/bug - Bug report
+- type/enhancement - Feature request or improvement
+- type/docs - Documentation
+- type/dependencies - Dependency update
 
-
-## Priority
+## Priority Labels
 (choose exactly ONE):
 
-- P0: Highest priority; production blocking, severe regression, data loss.
-- P1: Important but not immediately blocking.
-- P2: Normal or low priority.
-
+- priority/P0: Highest priority; production blocking, severe regression, data loss.
+- priority/P1: Important but not immediately blocking.
+- priority/P2: Normal or low priority.
 
 ## Estimated
 (Story points — choose exactly ONE):

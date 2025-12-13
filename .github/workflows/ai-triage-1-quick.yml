@@ -23,7 +23,7 @@ jobs:
 
     if: |
       github.event_name == 'workflow_dispatch' ||
-      !contains(github.event.issue.labels.*.name, 'triaged')
+      !contains(github.event.issue.labels.*.name, 'triage/quick')
 
     steps:
       - name: Check daily limit
@@ -190,7 +190,7 @@ jobs:
             --reason "not planned" \
             --comment "$COMMENT"
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "invalid,triaged"
+            --add-label "triage/quick,triage/invalid"
 
       - name: "Close: Duplicate"
         if: steps.triage.outputs.decision == 'duplicate'
@@ -226,7 +226,7 @@ jobs:
             --reason "not planned" \
             --comment "$COMMENT"
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "duplicate,triaged"
+            --add-label "triage/quick,triage/duplicate"
 
       - name: "Request: Clarification"
         if: steps.triage.outputs.decision == 'question'
@@ -254,7 +254,7 @@ jobs:
           gh issue comment ${{ github.event.issue.number || inputs.issue_number }} \
             --body "$COMMENT"
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "question,triaged"
+            --add-label "triage/quick,triage/question"
 
       - name: "Pass: Valid"
         if: steps.triage.outputs.decision == 'valid'
@@ -262,10 +262,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "valid,triaged"
+            --add-label "triage/quick,triage/valid"
 
           echo "✓ Issue passed quick triage: ${{ steps.triage.outputs.reason }}"
-
-          # Trigger Stage 2 (uncomment when ready)
-          # gh workflow run stage2-deep-analysis.yml \
-          #   -f issue_number=${{ github.event.issue.number || inputs.issue_number }}
+          echo "Stage 2 will be triggered automatically by the triage/valid label"

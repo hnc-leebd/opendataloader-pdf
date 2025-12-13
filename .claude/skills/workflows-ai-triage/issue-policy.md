@@ -1,4 +1,7 @@
-Labels (choose ONE OR MORE from the list below):
+# Issue Policy
+
+## Labels
+(choose ONE OR MORE from the list below):
 
 - enhancement
 - bug
@@ -11,21 +14,21 @@ Labels (choose ONE OR MORE from the list below):
 - question
 - wontfix
 
----
 
-Priority (choose exactly ONE):
+## Priority
+(choose exactly ONE):
 
 - P0: Highest priority; production blocking, severe regression, data loss.
 - P1: Important but not immediately blocking.
 - P2: Normal or low priority.
 
----
 
-Estimated (Story points — choose exactly ONE):
+## Estimated
+(Story points — choose exactly ONE):
 
 - 1, 2, 3, 5, 8
 
-Definitions:
+### Definitions:
 
 - 1 → Very simple, trivial work. (less than 1 day)
 - 2 → Small task, low complexity, straightforward. (1–2 days)

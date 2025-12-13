@@ -1,4 +1,4 @@
-# AI Auto-Fix Criteria
+# AI Fix Criteria
 
 ## Suitable for AI Auto-Fix
 

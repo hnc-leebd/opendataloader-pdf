@@ -150,10 +150,14 @@ run_stage2_test() {
   local case_name=$(jq -r '.name' "$case_file")
   local expected_action=$(jq -r '.expected.action' "$case_file")
 
+  # Use mock codebase for testing (prevents dependency on real codebase)
+  local mock_codebase="$FIXTURES_DIR/mock-codebase"
+
   TOTAL=$((TOTAL + 1))
 
   if $DRY_RUN; then
     log_info "  [DRY-RUN] Would test: $case_name"
+    log_info "  [DRY-RUN] Using mock codebase: $mock_codebase"
     # Show prompt preview
     local issue_json_file=$(mktemp)
     jq '{
@@ -162,7 +166,7 @@ run_stage2_test() {
       labels: [.input.labels[] | {name: .}],
       comments: [.input.comments[] | {author: {login: .author}, body: .body}]
     }' "$case_file" > "$issue_json_file"
-    "$AI_ISSUE_DIR/build-stage2-prompt.sh" "999" "$issue_json_file" | head -20
+    "$AI_ISSUE_DIR/build-stage2-prompt.sh" "999" "$issue_json_file" "$mock_codebase" | head -30
     echo "..."
     rm -f "$issue_json_file"
     return 0
@@ -182,7 +186,7 @@ run_stage2_test() {
 
   # Build and run using Claude Code CLI (same as workflow)
   local prompt_file=$(mktemp)
-  "$AI_ISSUE_DIR/build-stage2-prompt.sh" "999" "$issue_json_file" > "$prompt_file"
+  "$AI_ISSUE_DIR/build-stage2-prompt.sh" "999" "$issue_json_file" "$mock_codebase" > "$prompt_file"
 
   local response=$("$AI_ISSUE_DIR/call-claude-code.sh" "$prompt_file" "Read,Glob,Grep")
   rm -f "$prompt_file" "$issue_json_file"

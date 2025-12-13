@@ -29,17 +29,55 @@ OUTPUT_DIR="${1:-/tmp}"
 # Read from stdin
 RESPONSE_TEXT=$(cat)
 
-# Extract JSON from result (handle ```json wrapper if present)
-PARSED_JSON=$(echo "$RESPONSE_TEXT" | sed -n '/```json/,/```/p' | sed '1d;$d')
+# Extract JSON from result
+# Strategy: find the outermost JSON object that starts with { and ends with }
+# Handle nested code blocks by finding balanced braces
 
-if [ -z "$PARSED_JSON" ]; then
-  # Try to extract raw JSON object (multiline)
-  PARSED_JSON=$(echo "$RESPONSE_TEXT" | awk '/^{/,/^}/' | head -100)
-fi
+extract_json() {
+  local text="$1"
+  local json_block
+  local json_obj
 
-if [ -z "$PARSED_JSON" ]; then
-  PARSED_JSON='{}'
-fi
+  # First try: extract from ```json ... ``` block (first occurrence only)
+  json_block=$(echo "$text" | awk '
+    /```json/ { in_block=1; next }
+    /```/ && in_block { in_block=0; exit }
+    in_block { print }
+  ')
+
+  if [ -n "$json_block" ] && echo "$json_block" | jq -e . >/dev/null 2>&1; then
+    echo "$json_block"
+    return
+  fi
+
+  # Second try: find JSON object by matching braces
+  json_obj=$(echo "$text" | awk '
+    /^{/ {
+      depth=1;
+      line=$0;
+      while (depth > 0 && (getline) > 0) {
+        line = line "\n" $0
+        gsub(/[^{}]/, "", $0)
+        for (i=1; i<=length($0); i++) {
+          c = substr($0, i, 1)
+          if (c == "{") depth++
+          else if (c == "}") depth--
+        }
+      }
+      print line
+      exit
+    }
+  ')
+
+  if [ -n "$json_obj" ] && echo "$json_obj" | jq -e . >/dev/null 2>&1; then
+    echo "$json_obj"
+    return
+  fi
+
+  echo '{}'
+}
+
+PARSED_JSON=$(extract_json "$RESPONSE_TEXT")
 
 # Parse JSON fields
 ACTION=$(echo "$PARSED_JSON" | jq -r '.action // "fix/manual-required"')

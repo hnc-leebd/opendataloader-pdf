@@ -1,9 +1,9 @@
 {
   "name": "Auto-fix eligible - simple null check bug",
-  "description": "Missing null check causing NPE should be auto-fixable",
+  "description": "Missing null check causing error should be auto-fixable",
   "input": {
-    "title": "NullPointerException when PDF has no pages",
-    "body": "## Description\nWhen processing a PDF file that has no pages (corrupted or empty), the library throws a NullPointerException.\n\n## Stack Trace\n```\njava.lang.NullPointerException\n  at org.opendataloader.pdf.PdfProcessor.process(PdfProcessor.java:120)\n```\n\n## Expected\nShould return an empty result or throw a descriptive exception.\n\n## Environment\n- Java 17\n- opendataloader-pdf 1.2.0",
+    "title": "TypeError when PDF has no pages",
+    "body": "## Description\nWhen processing a PDF file that has no pages (corrupted or empty), the library throws a TypeError.\n\n## Stack Trace\n```\nTypeError: 'NoneType' object is not iterable\n  at process_pdf in pdf_processor.py\n```\n\n## Expected\nShould return an empty result or throw a descriptive exception.\n\n## Environment\n- Python 3.11\n- opendataloader-pdf 1.2.0",
     "labels": ["ai-issue/valid", "ai-issue/triaged"],
     "comments": []
   },

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build Stage 2 (Deep Triage) prompt
-# Usage: ./build-stage2-prompt.sh <issue_num> <issue_json_file>
+# Usage: ./build-stage2-prompt.sh <issue_num> <issue_json_file> [codebase_path]
 #
 # Outputs the complete prompt to stdout
 # Can be used in both GitHub Actions and local testing
@@ -10,6 +10,7 @@ set -euo pipefail
 # Arguments
 ISSUE_NUM="${1:-999}"
 ISSUE_JSON_FILE="${2:-}"
+CODEBASE_PATH="${3:-}"  # Optional: restrict codebase search to this path
 
 # Find script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,6 +41,14 @@ if [ -f "$SKILL_DIR/members.md" ]; then
   MEMBERS=$(cat "$SKILL_DIR/members.md")
 fi
 
+# Build codebase instruction
+if [ -n "$CODEBASE_PATH" ]; then
+  CODEBASE_INSTRUCTION="IMPORTANT: Only search within this directory: $CODEBASE_PATH
+Do NOT search outside this path. This is a test codebase for evaluation."
+else
+  CODEBASE_INSTRUCTION="Search the entire repository for relevant files."
+fi
+
 # Build prompt
 cat <<PROMPT_EOF
 Perform deep analysis for GitHub issue #$ISSUE_NUM using the ai-issue skill.
@@ -47,10 +56,13 @@ Perform deep analysis for GitHub issue #$ISSUE_NUM using the ai-issue skill.
 ## Issue Details
 $ISSUE_JSON
 
+## Codebase Scope
+$CODEBASE_INSTRUCTION
+
 ## Instructions
 Use the ai-issue skill to:
 1. Read the skill files in .claude/skills/ai-issue/ for policies and criteria
-2. **Analyze the codebase** to understand:
+2. **Analyze the codebase** (within the specified scope) to understand:
    - What the issue is about
    - Which files/components are involved
    - How the current implementation works

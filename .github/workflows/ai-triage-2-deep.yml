@@ -175,38 +175,40 @@ jobs:
         run: |
           ISSUE_NUM=${{ inputs.issue_number }}
           ISSUE_JSON=$(cat /tmp/issue.json)
+          ISSUE_TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
 
           # Create branch
           BRANCH="ai-fix/issue-$ISSUE_NUM"
           git checkout -b "$BRANCH"
 
           # Run Claude Code to fix the issue
-          FIX_PROMPT=$(cat <<'FIX_EOF'
-          You are fixing GitHub issue #ISSUE_NUM.
+          FIX_PROMPT=$(cat <<FIX_EOF
+          You are fixing GitHub issue #$ISSUE_NUM.
 
           ## Issue Details
-          ISSUE_JSON_PLACEHOLDER
+          $ISSUE_JSON
 
           ## Instructions
           1. Analyze the codebase to understand the issue
-          2. Write a test that reproduces the issue (test should FAIL initially)
+          2. Write a test that reproduces the issue (if applicable)
           3. Implement the fix
-          4. Verify the test now PASSES
+          4. Verify tests pass
           5. Ensure the build succeeds
           6. Only make minimal, focused changes
 
-          ## Important
-          - This project may use Java, Node.js, or Python - detect and use appropriate tools
-          - Run tests to verify your changes work
-          - If you cannot fix the issue or tests fail, output: {"success": false, "reason": "..."}
-          - If successful, output: {"success": true, "summary": "...", "files_changed": [...]}
+          ## Output Format
+          After completing the fix, output a summary in the following format:
+
+          ---FIX_SUMMARY_START---
+          SUCCESS: true/false
+          ANALYSIS: <what you found during analysis>
+          CHANGES: <list of files changed and why>
+          VERIFICATION: <how you verified the fix works>
+          ---FIX_SUMMARY_END---
 
           Do NOT create a PR - just make the code changes and verify they work.
           FIX_EOF
           )
-
-          FIX_PROMPT="${FIX_PROMPT//ISSUE_NUM/$ISSUE_NUM}"
-          FIX_PROMPT="${FIX_PROMPT//ISSUE_JSON_PLACEHOLDER/$ISSUE_JSON}"
 
           # Save prompt to file (avoid argument length limits)
           echo "$FIX_PROMPT" > /tmp/fix_prompt.txt
@@ -215,21 +217,28 @@ jobs:
             --print \
             --verbose \
             --allowedTools "Read,Glob,Grep,Edit,Write,Bash" \
-            2>&1 || echo '{"success": false, "reason": "Claude Code execution failed"}')
+            2>&1 || echo "FIX_FAILED")
 
           echo "=== Fix Result ==="
           echo "$FIX_RESULT"
           echo "=================="
 
-          # Check if fix was successful
-          SUCCESS=$(echo "$FIX_RESULT" | grep -o '"success":\s*true' || echo "")
+          # Save full output for PR body
+          echo "$FIX_RESULT" > /tmp/fix_result.txt
 
-          if [ -n "$SUCCESS" ] && [ -n "$(git status --porcelain)" ]; then
+          # Extract summary section if present
+          SUMMARY_SECTION=$(sed -n '/---FIX_SUMMARY_START---/,/---FIX_SUMMARY_END---/p' /tmp/fix_result.txt | sed '1d;$d')
+
+          # Check if fix was successful (has changes and summary indicates success)
+          if [ -n "$(git status --porcelain)" ]; then
+            # Get list of changed files
+            CHANGED_FILES=$(git diff --name-only HEAD)
+
             # Commit changes
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add -A
-            git commit -m "fix: resolve issue #$ISSUE_NUM
+            git commit -m "fix: resolve issue #$ISSUE_NUM - $ISSUE_TITLE
 
             🤖 Generated with Claude Code
 
@@ -237,15 +246,28 @@ jobs:
 
             git push origin "$BRANCH"
 
-            # Create PR
-            PR_URL=$(gh pr create \
-              --title "fix: resolve issue #$ISSUE_NUM" \
-              --body "$(cat <<EOF
+            # Build PR body with analysis info
+            PR_BODY=$(cat <<EOF
           ## Summary
-          Automated fix for #$ISSUE_NUM
+          Automated fix for #$ISSUE_NUM: **$ISSUE_TITLE**
 
-          ## Changes
-          $(echo "$FIX_RESULT" | jq -r '.summary // "See commits for details"')
+          ## Analysis
+          **Why this was auto-fixed:** ${{ steps.analysis.outputs.reason }}
+
+          ## AI Analysis Summary
+          \`\`\`
+          $SUMMARY_SECTION
+          \`\`\`
+
+          ## Changed Files
+          \`\`\`
+          $CHANGED_FILES
+          \`\`\`
+
+          ## Metadata
+          - **Priority:** ${{ steps.analysis.outputs.priority }}
+          - **Estimated:** ${{ steps.analysis.outputs.estimated }} story points
+          - **Labels:** ${{ steps.analysis.outputs.labels }}
 
           ## Test Plan
           - [ ] Tests pass
@@ -257,7 +279,12 @@ jobs:
 
           Closes #$ISSUE_NUM
           EOF
-          )" \
+          )
+
+            # Create PR
+            PR_URL=$(gh pr create \
+              --title "fix: resolve issue #$ISSUE_NUM - $ISSUE_TITLE" \
+              --body "$PR_BODY" \
               --base main \
               --head "$BRANCH")
 
@@ -265,8 +292,7 @@ jobs:
             echo "success=true" >> $GITHUB_OUTPUT
           else
             echo "success=false" >> $GITHUB_OUTPUT
-            FAIL_REASON=$(echo "$FIX_RESULT" | jq -r '.reason // "Unknown error"')
-            echo "fail_reason=$FAIL_REASON" >> $GITHUB_OUTPUT
+            echo "fail_reason=No changes were made" >> $GITHUB_OUTPUT
           fi
 
       - name: Action - Auto Comment

@@ -23,10 +23,12 @@ Two-stage AI system for automatic GitHub issue classification and processing.
 
 | File | Description |
 |------|-------------|
-| [workflow.md](workflow.md) | Detailed triage workflow (Stage 1/2 process, flowchart) |
+| [workflow.md](workflow.md) | Detailed triage workflow (Stage 1/2/3 process, flowchart) |
 | [issue-policy.md](issue-policy.md) | Labels, priority (P0-P2), story points policy |
-| [ai-fix-criteria.md](ai-auto-fix-criteria.md) | Criteria for AI auto-fix eligibility |
+| [ai-fix-criteria.md](ai-fix-criteria.md) | Criteria for AI auto-fix eligibility |
 | [members.md](members.md) | Team member list and availability |
+| [labels.md](labels.md) | Label naming conventions and definitions |
+| [testing.md](testing.md) | Test framework for validating triage decisions |
 
 ## Key Decisions
 

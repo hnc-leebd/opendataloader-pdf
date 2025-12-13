@@ -1,0 +1,15 @@
+{
+  "name": "Auto-fix eligible - simple null check bug",
+  "description": "Missing null check causing NPE should be auto-fixable",
+  "input": {
+    "title": "NullPointerException when PDF has no pages",
+    "body": "## Description\nWhen processing a PDF file that has no pages (corrupted or empty), the library throws a NullPointerException.\n\n## Stack Trace\n```\njava.lang.NullPointerException\n  at org.opendataloader.pdf.PdfProcessor.process(PdfProcessor.java:120)\n```\n\n## Expected\nShould return an empty result or throw a descriptive exception.\n\n## Environment\n- Java 17\n- opendataloader-pdf 1.2.0",
+    "labels": ["triage/valid", "triage/quick"],
+    "comments": []
+  },
+  "expected": {
+    "action": "auto_fix",
+    "labels_include": ["type/bug"],
+    "priority_in": ["P1", "P2"]
+  }
+}

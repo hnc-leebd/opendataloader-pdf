@@ -1,0 +1,57 @@
+name: "AI Triage Tests"
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ai-triage-*.yml'
+      - '.claude/skills/workflows-ai-triage/**'
+      - 'tests/ai-triage/**'
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Stage to test (1, 2, or all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - '1'
+          - '2'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: tests/ai-triage
+        run: npm install
+
+      - name: Run AI Triage Tests
+        working-directory: tests/ai-triage
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ "${{ inputs.stage }}" = "1" ]; then
+            npm run test:stage1
+          elif [ "${{ inputs.stage }}" = "2" ]; then
+            npm run test:stage2
+          else
+            npm test
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: tests/ai-triage/results/
+          if-no-files-found: ignore

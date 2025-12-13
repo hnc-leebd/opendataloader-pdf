@@ -1,0 +1,21 @@
+{
+  "name": "ai-triage-tests",
+  "version": "1.0.0",
+  "description": "Test framework for AI Triage workflows",
+  "type": "module",
+  "scripts": {
+    "test": "tsx runner.ts",
+    "test:stage1": "tsx runner.ts --stage=1",
+    "test:stage2": "tsx runner.ts --stage=2",
+    "test:verbose": "tsx runner.ts --verbose"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  }
+}

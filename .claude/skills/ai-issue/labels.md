@@ -19,12 +19,13 @@ All labels use `/` prefix for grouping in GitHub UI.
 | `ai-issue/duplicate` | `#CFD3D7` (light gray) | Duplicate of existing issue | Stage 1 |
 | `ai-issue/needs-info` | `#D876E3` (purple) | Needs more information | Stage 1 |
 
-## Fix Status Labels
+## Action Labels
 
 | Label | Color | Description | Set By |
 |-------|-------|-------------|--------|
 | `fix/auto-eligible` | `#0E8A16` (green) | Eligible for auto-fix | Stage 2 |
-| `fix/manual-required` | `#FBCA04` (yellow) | Requires human implementation | Stage 3 (on failure) |
+| `fix/manual-required` | `#FBCA04` (yellow) | Requires human implementation | Stage 2/3 |
+| `respond/comment-only` | `#C5DEF5` (light blue) | No code change needed, respond with comment | Stage 2 |
 
 ## Type Labels
 
@@ -63,6 +64,8 @@ New Issue
 │ Stage 2: Analyze                                         │
 │ Adds: ai-issue/analyzed + type/* + priority/* +          │
 │   - fix/auto-eligible (if auto-fixable)                  │
+│   - fix/manual-required (if needs human)                 │
+│   - respond/comment-only (if no code change needed)      │
 └──────────────────────────────────────────────────────────┘
     │ (fix/auto-eligible + manual trigger)
     ▼

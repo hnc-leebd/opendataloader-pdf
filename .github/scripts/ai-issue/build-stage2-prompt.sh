@@ -54,10 +54,18 @@ Use the ai-issue skill to:
    - What the issue is about
    - Which files/components are involved
    - How the current implementation works
-3. Decide action: "fix/auto-eligible" or "fix/manual-required"
+3. Decide action: "fix/auto-eligible", "fix/manual-required", or "respond/comment-only"
    - Use ai-fix-criteria.md to determine if auto-fix is appropriate
+   - Use "respond/comment-only" when no code change is needed:
+     * User didn't find existing feature (guide them to it)
+     * Documentation question (point to docs)
+     * Feature request requiring roadmap review
+     * External dependency issue (not our problem)
+     * Need more information to reproduce
+     * Duplicate of existing issue
+     * Working as designed (won't fix)
 4. Select appropriate labels, priority, and estimate based on issue-policy.md
-5. Recommend the best available team member from members.md
+5. Recommend the best available team member from members.md (skip if respond/comment-only)
 
 ## AI Fix Criteria
 ${AI_FIX_CRITERIA:-Use standard criteria: simple bugs, typos, type errors are auto-fixable. Architecture changes, security issues require manual review.}
@@ -71,7 +79,7 @@ ${MEMBERS:-Available: benedict (available)}
 ## Required Output
 Respond with JSON only (no markdown code blocks):
 {
-  "action": "fix/auto-eligible" | "fix/manual-required",
+  "action": "fix/auto-eligible" | "fix/manual-required" | "respond/comment-only",
   "labels": ["type/bug", "type/enhancement", ...],
   "priority": "P0" | "P1" | "P2",
   "estimated": 1 | 2 | 3 | 5 | 8,
@@ -84,6 +92,7 @@ Respond with JSON only (no markdown code blocks):
     "root_cause": "Technical explanation of why the issue occurs (if identifiable)",
     "suggested_approach": "How to fix or implement this"
   },
-  "auto_fix_rationale": "Why this is/isn't suitable for auto-fix (reference ai-fix-criteria.md)"
+  "action_rationale": "Why this action was chosen (reference ai-fix-criteria.md)",
+  "comment_draft": "(Only for respond/comment-only) Draft response to post on the issue"
 }
 PROMPT_EOF

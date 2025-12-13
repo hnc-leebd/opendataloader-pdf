@@ -83,11 +83,6 @@ jobs:
           # Get full issue details
           gh issue view $ISSUE_NUM --json title,body,labels,comments > /tmp/issue.json
 
-          # Read config files
-          cat .github/ai-config/metrics/AI_AUTO_FIX_CRITERIA.md > /tmp/criteria.md
-          cat .github/ai-config/policies/ISSUE_POLICY.md > /tmp/policy.md
-          cat .github/ai-config/team/members.md > /tmp/members.md
-
       - name: Run Claude Code - Analysis
         if: steps.check.outputs.skip != 'true'
         id: analysis
@@ -97,34 +92,22 @@ jobs:
         run: |
           ISSUE_NUM=${{ inputs.issue_number }}
           ISSUE_JSON=$(cat /tmp/issue.json)
-          CRITERIA=$(cat /tmp/criteria.md)
-          POLICY=$(cat /tmp/policy.md)
-          MEMBERS=$(cat /tmp/members.md)
 
-          PROMPT=$(cat <<'PROMPT_EOF'
-          You are a GitHub issue analyzer. Analyze this issue and decide the best action.
+          # Claude Code will automatically load context from .claude/skills/workflows-ai-triage/
+          PROMPT=$(cat <<PROMPT_EOF
+          Triage GitHub issue #$ISSUE_NUM using the workflows-ai-triage skill.
 
-          ## Issue #ISSUE_NUM
-          ISSUE_JSON_PLACEHOLDER
+          ## Issue Details
+          $ISSUE_JSON
 
-          ## AI Auto-Fix Criteria
-          CRITERIA_PLACEHOLDER
-
-          ## Issue Policy (Labels, Priority, Estimated)
-          POLICY_PLACEHOLDER
-
-          ## Team Members
-          MEMBERS_PLACEHOLDER
-
-          ## Your Task
-          1. Analyze the issue thoroughly
-          2. Decide action: "auto_fix", "auto_comment", or "assign"
-             - auto_fix: Issue is suitable for AI to fix (clear scope, predictable, testable, low risk)
-             - auto_comment: Issue can be resolved with explanation/guidance/roadmap mention
-             - assign: Issue needs human expert (architecture, domain knowledge, security, etc.)
-          3. Select appropriate labels, priority, and estimate based on policy
-          4. ALWAYS recommend the best team member (assignee) based on their role and issue content
-          5. Write a helpful comment for the issue
+          ## Instructions
+          Use the workflows-ai-triage skill to:
+          1. Read the skill files in .claude/skills/workflows-ai-triage/ for policies and criteria
+          2. Analyze the issue thoroughly
+          3. Decide action: "auto_fix", "auto_comment", or "assign"
+          4. Select appropriate labels, priority, and estimate based on issue-policy.md
+          5. Recommend the best available team member from members.md
+          6. Write a helpful comment for the issue
 
           Respond with JSON only:
           {
@@ -138,12 +121,6 @@ jobs:
           }
           PROMPT_EOF
           )
-
-          PROMPT="${PROMPT//ISSUE_NUM/$ISSUE_NUM}"
-          PROMPT="${PROMPT//ISSUE_JSON_PLACEHOLDER/$ISSUE_JSON}"
-          PROMPT="${PROMPT//CRITERIA_PLACEHOLDER/$CRITERIA}"
-          PROMPT="${PROMPT//POLICY_PLACEHOLDER/$POLICY}"
-          PROMPT="${PROMPT//MEMBERS_PLACEHOLDER/$MEMBERS}"
 
           # Save prompt to file (avoid argument length limits)
           echo "$PROMPT" > /tmp/analysis_prompt.txt

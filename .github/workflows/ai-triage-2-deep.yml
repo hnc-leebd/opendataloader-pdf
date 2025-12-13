@@ -16,8 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
-      contents: write
-      pull-requests: write
+      contents: read
       actions: read
 
     steps:
@@ -31,7 +30,7 @@ jobs:
           # Check daily limit
           TODAY=$(date -u +%Y-%m-%d)
           COUNT=$(gh api \
-            "/repos/${{ github.repository }}/actions/workflows/ai-2-deep-triage.yml/runs?status=success&created=>=$TODAY" \
+            "/repos/${{ github.repository }}/actions/workflows/ai-triage-2-deep.yml/runs?status=success&created=>=$TODAY" \
             --jq '.total_count')
 
           echo "Today's runs: $COUNT / $DAILY_LIMIT"
@@ -86,7 +85,7 @@ jobs:
       - name: Run Claude Code - Analysis
         if: steps.check.outputs.skip != 'true'
         id: analysis
-        timeout-minutes: 10
+        timeout-minutes: 15
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -94,33 +93,48 @@ jobs:
           ISSUE_JSON=$(cat /tmp/issue.json)
 
           # Claude Code will automatically load context from .claude/skills/workflows-ai-triage/
-          PROMPT=$(cat <<PROMPT_EOF
-          Triage GitHub issue #$ISSUE_NUM using the workflows-ai-triage skill.
+          PROMPT=$(cat <<'PROMPT_EOF'
+          Perform deep triage for GitHub issue #ISSUE_NUM_PLACEHOLDER using the workflows-ai-triage skill.
 
           ## Issue Details
-          $ISSUE_JSON
+          ISSUE_JSON_PLACEHOLDER
 
           ## Instructions
           Use the workflows-ai-triage skill to:
           1. Read the skill files in .claude/skills/workflows-ai-triage/ for policies and criteria
-          2. Analyze the issue thoroughly
-          3. Decide action: "auto_fix", "auto_comment", or "assign"
+          2. **Analyze the codebase** to understand:
+             - What the issue is about
+             - Which files/components are involved
+             - How the current implementation works
+          3. Decide action: "auto_fix" or "assign"
+             - Use ai-fix-criteria.md to determine if auto-fix is appropriate
           4. Select appropriate labels, priority, and estimate based on issue-policy.md
           5. Recommend the best available team member from members.md
-          6. Write a helpful comment for the issue
 
-          Respond with JSON only:
+          ## Required Output
+          Respond with JSON only (no markdown code blocks):
           {
-            "action": "auto_fix" | "auto_comment" | "assign",
+            "action": "auto_fix" | "assign",
             "labels": ["label1", "label2"],
             "priority": "P0" | "P1" | "P2",
             "estimated": 1 | 2 | 3 | 5 | 8,
             "assignee": "github_id",
-            "reason": "Why this action was chosen",
-            "comment": "Comment to post on the issue (friendly, helpful)"
+            "analysis": {
+              "summary": "One paragraph summary of what this issue is about",
+              "expected_behavior": "What the user expects to happen",
+              "current_behavior": "What currently happens (if applicable)",
+              "affected_files": ["path/to/file1.ts", "path/to/file2.ts"],
+              "root_cause": "Technical explanation of why the issue occurs (if identifiable)",
+              "suggested_approach": "How to fix or implement this"
+            },
+            "auto_fix_rationale": "Why this is/isn't suitable for auto-fix (reference ai-fix-criteria.md)"
           }
           PROMPT_EOF
           )
+
+          # Replace placeholders
+          PROMPT="${PROMPT//ISSUE_NUM_PLACEHOLDER/$ISSUE_NUM}"
+          PROMPT="${PROMPT//ISSUE_JSON_PLACEHOLDER/$ISSUE_JSON}"
 
           # Save prompt to file (avoid argument length limits)
           echo "$PROMPT" > /tmp/analysis_prompt.txt
@@ -138,8 +152,11 @@ jobs:
           # Extract JSON from result (handle ```json wrapper if present)
           PARSED_JSON=$(echo "$RESULT" | sed -n '/```json/,/```/p' | sed '1d;$d')
           if [ -z "$PARSED_JSON" ]; then
-            # Try to extract raw JSON object
-            PARSED_JSON=$(echo "$RESULT" | grep -Eo '\{[^}]+\}' | head -1 || echo '{}')
+            # Try to extract raw JSON object (multiline)
+            PARSED_JSON=$(echo "$RESULT" | awk '/^{/,/^}/' | head -100)
+          fi
+          if [ -z "$PARSED_JSON" ]; then
+            PARSED_JSON='{}'
           fi
 
           echo "=== Parsed JSON ==="
@@ -151,286 +168,166 @@ jobs:
           LABELS=$(echo "$PARSED_JSON" | jq -c '.labels // []')
           PRIORITY=$(echo "$PARSED_JSON" | jq -r '.priority // "P2"')
           ESTIMATED=$(echo "$PARSED_JSON" | jq -r '.estimated // 3')
-          ASSIGNEE=$(echo "$PARSED_JSON" | jq -r '.assignee // "github_id"' | tr -d '@')
-          REASON=$(echo "$PARSED_JSON" | jq -r '.reason // "Analysis failed"')
-          COMMENT=$(echo "$PARSED_JSON" | jq -r '.comment // "Unable to analyze this issue."')
+          ASSIGNEE=$(echo "$PARSED_JSON" | jq -r '.assignee // ""' | tr -d '@')
+          AUTO_FIX_RATIONALE=$(echo "$PARSED_JSON" | jq -r '.auto_fix_rationale // ""')
+
+          # Extract analysis fields
+          ANALYSIS_SUMMARY=$(echo "$PARSED_JSON" | jq -r '.analysis.summary // "Unable to analyze"')
+          EXPECTED_BEHAVIOR=$(echo "$PARSED_JSON" | jq -r '.analysis.expected_behavior // ""')
+          CURRENT_BEHAVIOR=$(echo "$PARSED_JSON" | jq -r '.analysis.current_behavior // ""')
+          AFFECTED_FILES=$(echo "$PARSED_JSON" | jq -r '.analysis.affected_files // [] | join(", ")')
+          ROOT_CAUSE=$(echo "$PARSED_JSON" | jq -r '.analysis.root_cause // ""')
+          SUGGESTED_APPROACH=$(echo "$PARSED_JSON" | jq -r '.analysis.suggested_approach // ""')
 
           echo "action=$ACTION" >> $GITHUB_OUTPUT
           echo "labels=$LABELS" >> $GITHUB_OUTPUT
           echo "priority=$PRIORITY" >> $GITHUB_OUTPUT
           echo "estimated=$ESTIMATED" >> $GITHUB_OUTPUT
           echo "assignee=$ASSIGNEE" >> $GITHUB_OUTPUT
-          echo "reason=$REASON" >> $GITHUB_OUTPUT
 
-          # Save comment to file (handles multiline)
-          echo "$COMMENT" > /tmp/comment.txt
+          # Save analysis to files for comment construction
+          echo "$ANALYSIS_SUMMARY" > /tmp/analysis_summary.txt
+          echo "$EXPECTED_BEHAVIOR" > /tmp/expected_behavior.txt
+          echo "$CURRENT_BEHAVIOR" > /tmp/current_behavior.txt
+          echo "$AFFECTED_FILES" > /tmp/affected_files.txt
+          echo "$ROOT_CAUSE" > /tmp/root_cause.txt
+          echo "$SUGGESTED_APPROACH" > /tmp/suggested_approach.txt
+          echo "$AUTO_FIX_RATIONALE" > /tmp/auto_fix_rationale.txt
 
-      - name: Action - Auto Fix
-        if: steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'auto_fix'
-        id: autofix
-        timeout-minutes: 30
+      - name: Post Analysis Comment
+        if: steps.check.outputs.skip != 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSIGNEE: ${{ steps.analysis.outputs.assignee }}
+          PRIORITY: ${{ steps.analysis.outputs.priority }}
+          ESTIMATED: ${{ steps.analysis.outputs.estimated }}
+          ACTION: ${{ steps.analysis.outputs.action }}
         run: |
           ISSUE_NUM=${{ inputs.issue_number }}
-          ISSUE_JSON=$(cat /tmp/issue.json)
-          ISSUE_TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
 
-          # Create branch
-          BRANCH="ai-fix/issue-$ISSUE_NUM"
-          git checkout -b "$BRANCH"
+          # Read analysis from files
+          SUMMARY=$(cat /tmp/analysis_summary.txt)
+          EXPECTED=$(cat /tmp/expected_behavior.txt)
+          CURRENT=$(cat /tmp/current_behavior.txt)
+          FILES=$(cat /tmp/affected_files.txt)
+          ROOT_CAUSE=$(cat /tmp/root_cause.txt)
+          APPROACH=$(cat /tmp/suggested_approach.txt)
+          AUTO_FIX_RATIONALE=$(cat /tmp/auto_fix_rationale.txt)
 
-          # Run Claude Code to fix the issue
-          FIX_PROMPT=$(cat <<FIX_EOF
-          You are fixing GitHub issue #$ISSUE_NUM.
-
-          ## Issue Details
-          $ISSUE_JSON
-
-          ## Instructions
-          1. Analyze the codebase to understand the issue
-          2. Write a test that reproduces the issue (if applicable)
-          3. Implement the fix
-          4. Verify tests pass
-          5. Ensure the build succeeds
-          6. Only make minimal, focused changes
-
-          ## Output Format
-          After completing the fix, output a summary in the following format:
-
-          ---FIX_SUMMARY_START---
-          SUCCESS: true/false
-          ANALYSIS: <what you found during analysis>
-          CHANGES: <list of files changed and why>
-          VERIFICATION: <how you verified the fix works>
-          ---FIX_SUMMARY_END---
-
-          Do NOT create a PR - just make the code changes and verify they work.
-          FIX_EOF
-          )
-
-          # Save prompt to file (avoid argument length limits)
-          echo "$FIX_PROMPT" > /tmp/fix_prompt.txt
-
-          FIX_RESULT=$(cat /tmp/fix_prompt.txt | npx -y @anthropic-ai/claude-code \
-            --print \
-            --verbose \
-            --allowedTools "Read,Glob,Grep,Edit,Write,Bash" \
-            2>&1 || echo "FIX_FAILED")
-
-          echo "=== Fix Result ==="
-          echo "$FIX_RESULT"
-          echo "=================="
-
-          # Save full output for PR body
-          echo "$FIX_RESULT" > /tmp/fix_result.txt
-
-          # Extract summary section if present
-          SUMMARY_SECTION=$(sed -n '/---FIX_SUMMARY_START---/,/---FIX_SUMMARY_END---/p' /tmp/fix_result.txt | sed '1d;$d')
-
-          # Check if fix was successful (has changes and summary indicates success)
-          if [ -n "$(git status --porcelain)" ]; then
-            # Get list of changed files
-            CHANGED_FILES=$(git diff --name-only HEAD)
-
-            # Commit changes
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "fix: resolve issue #$ISSUE_NUM - $ISSUE_TITLE
-
-            🤖 Generated with Claude Code
-
-            Co-Authored-By: Claude <noreply@anthropic.com>"
-
-            git push origin "$BRANCH"
-
-            # Build PR body with analysis info
-            PR_BODY=$(cat <<EOF
-          ## Summary
-          Automated fix for #$ISSUE_NUM: **$ISSUE_TITLE**
-
-          ## Analysis
-          **Why this was auto-fixed:** ${{ steps.analysis.outputs.reason }}
-
-          ## AI Analysis Summary
-          \`\`\`
-          $SUMMARY_SECTION
-          \`\`\`
-
-          ## Changed Files
-          \`\`\`
-          $CHANGED_FILES
-          \`\`\`
-
-          ## Metadata
-          - **Priority:** ${{ steps.analysis.outputs.priority }}
-          - **Estimated:** ${{ steps.analysis.outputs.estimated }} story points
-          - **Labels:** ${{ steps.analysis.outputs.labels }}
-
-          ## Test Plan
-          - [ ] Tests pass
-          - [ ] Build succeeds
-          - [ ] Manual verification
-
-          ---
-          🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-          Closes #$ISSUE_NUM
-          EOF
-          )
-
-            # Create PR
-            PR_URL=$(gh pr create \
-              --title "fix: resolve issue #$ISSUE_NUM - $ISSUE_TITLE" \
-              --body "$PR_BODY" \
-              --base main \
-              --head "$BRANCH")
-
-            echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
-            echo "success=true" >> $GITHUB_OUTPUT
-          else
-            echo "success=false" >> $GITHUB_OUTPUT
-            echo "fail_reason=No changes were made" >> $GITHUB_OUTPUT
+          # Build conditional sections
+          EXPECTED_SECTION=""
+          if [ -n "$EXPECTED" ]; then
+            EXPECTED_SECTION="### Expected Behavior
+          $EXPECTED"
           fi
 
-      - name: Action - Auto Comment
-        if: steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'auto_comment'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ASSIGNEE: ${{ steps.analysis.outputs.assignee }}
-        run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
-          COMMENT=$(cat /tmp/comment.txt)
+          CURRENT_SECTION=""
+          if [ -n "$CURRENT" ]; then
+            CURRENT_SECTION="### Current Behavior
+          $CURRENT"
+          fi
 
-          # Always assign
-          gh issue edit $ISSUE_NUM --add-assignee "$ASSIGNEE"
+          ROOT_CAUSE_SECTION=""
+          if [ -n "$ROOT_CAUSE" ]; then
+            ROOT_CAUSE_SECTION="### Root Cause
+          $ROOT_CAUSE"
+          fi
 
-          FULL_COMMENT=$(cat <<EOF
-          $COMMENT
-
-          ---
-          **Assigned to:** @$ASSIGNEE
-
-          **Analysis Summary**
-          - Priority: ${{ steps.analysis.outputs.priority }}
-          - Estimated: ${{ steps.analysis.outputs.estimated }} story points
-          - Reason: ${{ steps.analysis.outputs.reason }}
-
-          🤖 *This is an automated response generated by AI and may be inaccurate or inappropriate. If something seems off, please let us know!*
-          EOF
-          )
-
-          gh issue comment $ISSUE_NUM --body "$FULL_COMMENT"
-
-      - name: Action - Assign to Member
-        if: steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'assign'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ASSIGNEE: ${{ steps.analysis.outputs.assignee }}
-        run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
-          COMMENT=$(cat /tmp/comment.txt)
-
-          # Always assign
-          gh issue edit $ISSUE_NUM --add-assignee "$ASSIGNEE"
-
-          FULL_COMMENT=$(cat <<EOF
-          $COMMENT
-
-          ---
-          **Assigned to:** @$ASSIGNEE
-
-          **Analysis Summary**
-          - Priority: ${{ steps.analysis.outputs.priority }}
-          - Estimated: ${{ steps.analysis.outputs.estimated }} story points
-          - Reason: ${{ steps.analysis.outputs.reason }}
-
-          🤖 *This is an automated response generated by AI and may be inaccurate or inappropriate. If something seems off, please let us know!*
-          EOF
-          )
-
-          gh issue comment $ISSUE_NUM --body "$FULL_COMMENT"
-
-      - name: Fallback - Auto Fix Failed
-        if: steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'auto_fix' && steps.autofix.outputs.success != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ASSIGNEE: ${{ steps.analysis.outputs.assignee }}
-        run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
-
-          # Assign to the recommended assignee (fallback to review)
-          gh issue edit $ISSUE_NUM --add-assignee "$ASSIGNEE"
+          # Determine action badge
+          if [ "$ACTION" = "auto_fix" ]; then
+            ACTION_BADGE="🤖 **Auto-fix eligible** - Stage 3 can attempt automatic fix"
+          else
+            ACTION_BADGE="👤 **Manual fix required** - Assigned for human implementation"
+          fi
 
           COMMENT=$(cat <<EOF
-          Hi there! 👋
+          ## 🔍 AI Deep Analysis
 
-          I attempted to automatically fix this issue, but encountered some difficulties.
+          ### Summary
+          $SUMMARY
 
-          **Reason:** ${{ steps.autofix.outputs.fail_reason }}
+          $EXPECTED_SECTION
 
-          I've assigned this to @$ASSIGNEE for manual review.
+          $CURRENT_SECTION
+
+          ### Affected Files
+          \`$FILES\`
+
+          $ROOT_CAUSE_SECTION
+
+          ### Suggested Approach
+          $APPROACH
 
           ---
-          **Analysis Summary**
-          - Priority: ${{ steps.analysis.outputs.priority }}
-          - Estimated: ${{ steps.analysis.outputs.estimated }} story points
 
-          🤖 *This is an automated response generated by AI and may be inaccurate or inappropriate. If something seems off, please let us know!*
+          ## 📋 Triage Decision
+
+          $ACTION_BADGE
+
+          | Field | Value |
+          |-------|-------|
+          | **Priority** | $PRIORITY |
+          | **Estimate** | $ESTIMATED story points |
+          | **Assignee** | @$ASSIGNEE |
+
+          <details>
+          <summary>Auto-fix rationale</summary>
+
+          $AUTO_FIX_RATIONALE
+
+          </details>
+
+          ---
+          🤖 *This analysis was generated by AI and may be inaccurate or inappropriate. If something seems off, please let us know!*
           EOF
           )
 
           gh issue comment $ISSUE_NUM --body "$COMMENT"
+
+          # Assign to recommended member
+          if [ -n "$ASSIGNEE" ]; then
+            gh issue edit $ISSUE_NUM --add-assignee "$ASSIGNEE" || echo "Failed to assign to $ASSIGNEE"
+          fi
 
       - name: Update Labels
         if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LABELS: ${{ steps.analysis.outputs.labels }}
+          ACTION: ${{ steps.analysis.outputs.action }}
+          PRIORITY: ${{ steps.analysis.outputs.priority }}
         run: |
           ISSUE_NUM=${{ inputs.issue_number }}
 
-          # Add analysis labels
+          # Build label arguments
           LABEL_ARGS=""
           for label in $(echo "$LABELS" | jq -r '.[]'); do
             LABEL_ARGS="$LABEL_ARGS --add-label \"$label\""
           done
 
-          # Add deep-triaged label
-          eval gh issue edit $ISSUE_NUM $LABEL_ARGS --add-label "deep-triaged"
+          # Add priority label
+          LABEL_ARGS="$LABEL_ARGS --add-label \"$PRIORITY\""
 
-      - name: Post PR Comment (if auto-fix succeeded)
-        if: steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'auto_fix' && steps.autofix.outputs.success == 'true'
+          # Add auto-fixable label if applicable
+          if [ "$ACTION" = "auto_fix" ]; then
+            LABEL_ARGS="$LABEL_ARGS --add-label \"auto-fixable\""
+          fi
+
+          # Add deep-triaged label
+          LABEL_ARGS="$LABEL_ARGS --add-label \"deep-triaged\""
+
+          eval gh issue edit $ISSUE_NUM $LABEL_ARGS
+
+      - name: Trigger Stage 3 (if auto-fixable)
+        if: steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'auto_fix'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ steps.autofix.outputs.pr_url }}
-          ASSIGNEE: ${{ steps.analysis.outputs.assignee }}
         run: |
           ISSUE_NUM=${{ inputs.issue_number }}
 
-          # Assign for PR review
-          gh issue edit $ISSUE_NUM --add-assignee "$ASSIGNEE"
+          echo "✅ Issue #$ISSUE_NUM is eligible for auto-fix"
+          echo "To trigger Stage 3, run:"
+          echo "  gh workflow run ai-triage-3-fix.yml -f issue_number=$ISSUE_NUM"
 
-          COMMENT=$(cat <<EOF
-          Hi there! 👋
-
-          I've analyzed this issue and created a fix!
-
-          **Pull Request:** $PR_URL
-
-          **Assigned to:** @$ASSIGNEE for review
-
-          Please review the changes and merge if everything looks good.
-
-          ---
-          **Analysis Summary**
-          - Priority: ${{ steps.analysis.outputs.priority }}
-          - Estimated: ${{ steps.analysis.outputs.estimated }} story points
-
-          🤖 *This is an automated response generated by AI and may be inaccurate or inappropriate. If something seems off, please let us know!*
-          EOF
-          )
-
-          gh issue comment $ISSUE_NUM --body "$COMMENT"
+          # Uncomment to auto-trigger Stage 3:
+          # gh workflow run ai-triage-3-fix.yml -f issue_number=$ISSUE_NUM

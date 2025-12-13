@@ -4,8 +4,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/ai-triage-*.yml'
+      - '.github/scripts/triage/**'
       - '.claude/skills/workflows-ai-triage/**'
-      - 'tests/ai-triage/**'
   workflow_dispatch:
     inputs:
       stage:
@@ -17,6 +17,11 @@ on:
           - 'all'
           - '1'
           - '2'
+      dry_run:
+        description: 'Dry run (no API calls)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   test:
@@ -26,32 +31,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        working-directory: tests/ai-triage
-        run: npm install
-
       - name: Run AI Triage Tests
-        working-directory: tests/ai-triage
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          ARGS=""
           if [ "${{ inputs.stage }}" = "1" ]; then
-            npm run test:stage1
+            ARGS="--stage=1"
           elif [ "${{ inputs.stage }}" = "2" ]; then
-            npm run test:stage2
-          else
-            npm test
+            ARGS="--stage=2"
           fi
 
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: tests/ai-triage/results/
-          if-no-files-found: ignore
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+
+          .github/scripts/triage/test/run-tests.sh $ARGS

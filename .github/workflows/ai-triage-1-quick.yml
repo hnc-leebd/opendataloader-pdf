@@ -51,7 +51,9 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.limit.outputs.exceeded != 'true'
         with:
-          sparse-checkout: README.md
+          sparse-checkout: |
+            README.md
+            .github/scripts/triage
           sparse-checkout-cone-mode: false
 
       - name: Gather context
@@ -87,87 +89,34 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          # Build prompt
-          PROMPT=$(cat <<'EOF'
-          You are a GitHub issue triage bot. Make a quick decision based on limited information.
+          # Build prompt using shared script
+          ISSUE_NUM="${{ github.event.issue.number || inputs.issue_number }}"
+          .github/scripts/triage/build-stage1-prompt.sh \
+            "$ISSUE_NUM" \
+            "${{ steps.context.outputs.title }}" \
+            "${{ steps.context.outputs.body }}" \
+            "README.md" \
+            "/tmp/issues.txt" > /tmp/triage_prompt.txt
 
-          ## Project (from README)
-          PROJECT_README
+          # Call API using shared script
+          RESPONSE=$(.github/scripts/triage/call-claude-api.sh /tmp/triage_prompt.txt "claude-sonnet-4-5-20250514" 256)
 
-          ## Existing Issues
-          EXISTING_ISSUES
+          echo "=== LLM Response ==="
+          echo "$RESPONSE"
+          echo "===================="
 
-          ## New Issue #ISSUE_NUM
-          Title: ISSUE_TITLE
-          Body: ISSUE_BODY
+          # Parse response using shared script
+          PARSED=$(echo "$RESPONSE" | .github/scripts/triage/parse-stage1-response.sh)
 
-          ## Decision Required
-          Based ONLY on the README and issue list above, determine:
-          1. Is this SPAM or OUT OF SCOPE? (ads, gibberish, abuse, unrelated to project) → "invalid"
-          2. Is this a DUPLICATE? (very similar to existing issue) → "duplicate"
-          3. Is this UNCLEAR? (missing reproduction steps, environment, or details) → "question"
-          4. Otherwise → "valid"
+          echo "=== Parsed Result ==="
+          echo "$PARSED"
+          echo "====================="
 
-          Respond with JSON only:
-          {
-            "decision": "invalid" | "duplicate" | "question" | "valid",
-            "duplicate_of": <issue number or null>,
-            "reason": "one sentence explanation",
-            "questions": ["question1", ...] // only if decision is "question"
-          }
-          EOF
-          )
-
-          # Replace placeholders
-          README_CONTENT=$(head -50 README.md 2>/dev/null || echo "No README")
-          EXISTING=$(cat /tmp/issues.txt)
-
-          PROMPT="${PROMPT//PROJECT_README/$README_CONTENT}"
-          PROMPT="${PROMPT//EXISTING_ISSUES/$EXISTING}"
-          PROMPT="${PROMPT//ISSUE_NUM/${{ github.event.issue.number || inputs.issue_number }}}"
-          PROMPT="${PROMPT//ISSUE_TITLE/${{ steps.context.outputs.title }}}"
-          PROMPT="${PROMPT//ISSUE_BODY/${{ steps.context.outputs.body }}}"
-
-          # Call API
-          RESPONSE=$(curl -s -X POST https://api.anthropic.com/v1/messages \
-            -H "x-api-key: $ANTHROPIC_API_KEY" \
-            -H "content-type: application/json" \
-            -H "anthropic-version: 2023-06-01" \
-            -d "$(jq -n --arg p "$PROMPT" '{
-              model: "claude-sonnet-4-5",
-              max_tokens: 256,
-              messages: [{role: "user", content: $p}]
-            }')")
-
-          # Debug: show full API response
-          echo "=== API Response ==="
-          echo "$RESPONSE" | jq '.'
-          echo "==================="
-
-          # Check for API error
-          if echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
-            echo "API Error: $(echo "$RESPONSE" | jq -r '.error.message')"
-            exit 1
-          fi
-
-          # Extract text content
-          TEXT=$(echo "$RESPONSE" | jq -r '.content[0].text // empty')
-          echo "=== LLM Text ==="
-          echo "$TEXT"
-          echo "================"
-
-          # Parse JSON from text (handle multiline JSON)
-          RESULT=$(echo "$TEXT" | jq -c '.' 2>/dev/null || echo "$TEXT" | sed -n '/{/,/}/p' | jq -c '.' 2>/dev/null || echo '{}')
-          echo "Parsed result: $RESULT"
-
-          # Parse outputs
-          echo "decision=$(echo "$RESULT" | jq -r '.decision // "valid"')" >> $GITHUB_OUTPUT
-          echo "duplicate_of=$(echo "$RESULT" | jq -r '.duplicate_of // empty')" >> $GITHUB_OUTPUT
-          echo "reason=$(echo "$RESULT" | jq -r '.reason // "Could not parse response"')" >> $GITHUB_OUTPUT
-          echo "questions=$(echo "$RESULT" | jq -c '.questions // []')" >> $GITHUB_OUTPUT
+          # Output to GitHub Actions
+          echo "$PARSED" >> $GITHUB_OUTPUT
 
       - name: "Close: Invalid"
-        if: steps.triage.outputs.decision == 'invalid'
+        if: steps.triage.outputs.decision == 'triage/invalid'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REASON: ${{ steps.triage.outputs.reason }}
@@ -193,7 +142,7 @@ jobs:
             --add-label "triage/quick,triage/invalid"
 
       - name: "Close: Duplicate"
-        if: steps.triage.outputs.decision == 'duplicate'
+        if: steps.triage.outputs.decision == 'triage/duplicate'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -229,7 +178,7 @@ jobs:
             --add-label "triage/quick,triage/duplicate"
 
       - name: "Request: Clarification"
-        if: steps.triage.outputs.decision == 'question'
+        if: steps.triage.outputs.decision == 'triage/needs-info'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           QUESTIONS: ${{ steps.triage.outputs.questions }}
@@ -254,10 +203,10 @@ jobs:
           gh issue comment ${{ github.event.issue.number || inputs.issue_number }} \
             --body "$COMMENT"
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "triage/quick,triage/question"
+            --add-label "triage/quick,triage/needs-info"
 
       - name: "Pass: Valid"
-        if: steps.triage.outputs.decision == 'valid'
+        if: steps.triage.outputs.decision == 'triage/valid'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

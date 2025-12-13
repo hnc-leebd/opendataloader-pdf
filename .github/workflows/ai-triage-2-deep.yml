@@ -26,11 +26,11 @@ jobs:
     # Run when:
     # 1. workflow_dispatch (manual)
     # 2. triage/valid label added (from Stage 1)
-    # 3. comment on issue with triage/question label (user responded)
+    # 3. comment on issue with triage/needs-info label (user responded)
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issues' && github.event.label.name == 'triage/valid') ||
-      (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'triage/question'))
+      (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'triage/needs-info'))
 
     steps:
       - name: Check preconditions
@@ -69,10 +69,10 @@ jobs:
             exit 0
           fi
 
-          # Check if valid or question (passed Stage 1)
-          if ! echo "$LABELS" | grep -qE "triage/valid|triage/question"; then
+          # Check if valid or needs-info (passed Stage 1)
+          if ! echo "$LABELS" | grep -qE "triage/valid|triage/needs-info"; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Issue not marked as triage/valid or triage/question (Stage 1 not passed)" >> $GITHUB_OUTPUT
+            echo "reason=Issue not marked as triage/valid or triage/needs-info (Stage 1 not passed)" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -111,109 +111,26 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           ISSUE_NUM=${{ steps.check.outputs.issue_number }}
-          ISSUE_JSON=$(cat /tmp/issue.json)
 
-          # Claude Code will automatically load context from .claude/skills/workflows-ai-triage/
-          PROMPT=$(cat <<'PROMPT_EOF'
-          Perform deep triage for GitHub issue #ISSUE_NUM_PLACEHOLDER using the workflows-ai-triage skill.
+          # Build prompt using shared script
+          .github/scripts/triage/build-stage2-prompt.sh "$ISSUE_NUM" "/tmp/issue.json" > /tmp/analysis_prompt.txt
 
-          ## Issue Details
-          ISSUE_JSON_PLACEHOLDER
-
-          ## Instructions
-          Use the workflows-ai-triage skill to:
-          1. Read the skill files in .claude/skills/workflows-ai-triage/ for policies and criteria
-          2. **Analyze the codebase** to understand:
-             - What the issue is about
-             - Which files/components are involved
-             - How the current implementation works
-          3. Decide action: "auto_fix" or "assign"
-             - Use ai-fix-criteria.md to determine if auto-fix is appropriate
-          4. Select appropriate labels, priority, and estimate based on issue-policy.md
-          5. Recommend the best available team member from members.md
-
-          ## Required Output
-          Respond with JSON only (no markdown code blocks):
-          {
-            "action": "auto_fix" | "assign",
-            "labels": ["label1", "label2"],
-            "priority": "P0" | "P1" | "P2",
-            "estimated": 1 | 2 | 3 | 5 | 8,
-            "assignee": "github_id",
-            "analysis": {
-              "summary": "One paragraph summary of what this issue is about",
-              "expected_behavior": "What the user expects to happen",
-              "current_behavior": "What currently happens (if applicable)",
-              "affected_files": ["path/to/file1.ts", "path/to/file2.ts"],
-              "root_cause": "Technical explanation of why the issue occurs (if identifiable)",
-              "suggested_approach": "How to fix or implement this"
-            },
-            "auto_fix_rationale": "Why this is/isn't suitable for auto-fix (reference ai-fix-criteria.md)"
-          }
-          PROMPT_EOF
-          )
-
-          # Replace placeholders
-          PROMPT="${PROMPT//ISSUE_NUM_PLACEHOLDER/$ISSUE_NUM}"
-          PROMPT="${PROMPT//ISSUE_JSON_PLACEHOLDER/$ISSUE_JSON}"
-
-          # Save prompt to file (avoid argument length limits)
-          echo "$PROMPT" > /tmp/analysis_prompt.txt
-
-          RESULT=$(cat /tmp/analysis_prompt.txt | npx -y @anthropic-ai/claude-code \
-            --print \
-            --verbose \
-            --allowedTools "Read,Glob,Grep" \
-            2>&1 || echo '{}')
+          # Run Claude Code CLI using shared script
+          RESULT=$(.github/scripts/triage/call-claude-code.sh /tmp/analysis_prompt.txt "Read,Glob,Grep")
 
           echo "=== Analysis Result ==="
           echo "$RESULT"
           echo "======================="
 
-          # Extract JSON from result (handle ```json wrapper if present)
-          PARSED_JSON=$(echo "$RESULT" | sed -n '/```json/,/```/p' | sed '1d;$d')
-          if [ -z "$PARSED_JSON" ]; then
-            # Try to extract raw JSON object (multiline)
-            PARSED_JSON=$(echo "$RESULT" | awk '/^{/,/^}/' | head -100)
-          fi
-          if [ -z "$PARSED_JSON" ]; then
-            PARSED_JSON='{}'
-          fi
+          # Parse response using shared script (writes files to /tmp)
+          PARSED=$(echo "$RESULT" | .github/scripts/triage/parse-stage2-response.sh /tmp)
 
-          echo "=== Parsed JSON ==="
-          echo "$PARSED_JSON"
-          echo "==================="
+          echo "=== Parsed Result ==="
+          echo "$PARSED"
+          echo "====================="
 
-          # Parse JSON fields
-          ACTION=$(echo "$PARSED_JSON" | jq -r '.action // "assign"')
-          LABELS=$(echo "$PARSED_JSON" | jq -c '.labels // []')
-          PRIORITY=$(echo "$PARSED_JSON" | jq -r '.priority // "P2"')
-          ESTIMATED=$(echo "$PARSED_JSON" | jq -r '.estimated // 3')
-          ASSIGNEE=$(echo "$PARSED_JSON" | jq -r '.assignee // ""' | tr -d '@')
-          AUTO_FIX_RATIONALE=$(echo "$PARSED_JSON" | jq -r '.auto_fix_rationale // ""')
-
-          # Extract analysis fields
-          ANALYSIS_SUMMARY=$(echo "$PARSED_JSON" | jq -r '.analysis.summary // "Unable to analyze"')
-          EXPECTED_BEHAVIOR=$(echo "$PARSED_JSON" | jq -r '.analysis.expected_behavior // ""')
-          CURRENT_BEHAVIOR=$(echo "$PARSED_JSON" | jq -r '.analysis.current_behavior // ""')
-          AFFECTED_FILES=$(echo "$PARSED_JSON" | jq -r '.analysis.affected_files // [] | join(", ")')
-          ROOT_CAUSE=$(echo "$PARSED_JSON" | jq -r '.analysis.root_cause // ""')
-          SUGGESTED_APPROACH=$(echo "$PARSED_JSON" | jq -r '.analysis.suggested_approach // ""')
-
-          echo "action=$ACTION" >> $GITHUB_OUTPUT
-          echo "labels=$LABELS" >> $GITHUB_OUTPUT
-          echo "priority=$PRIORITY" >> $GITHUB_OUTPUT
-          echo "estimated=$ESTIMATED" >> $GITHUB_OUTPUT
-          echo "assignee=$ASSIGNEE" >> $GITHUB_OUTPUT
-
-          # Save analysis to files for comment construction
-          echo "$ANALYSIS_SUMMARY" > /tmp/analysis_summary.txt
-          echo "$EXPECTED_BEHAVIOR" > /tmp/expected_behavior.txt
-          echo "$CURRENT_BEHAVIOR" > /tmp/current_behavior.txt
-          echo "$AFFECTED_FILES" > /tmp/affected_files.txt
-          echo "$ROOT_CAUSE" > /tmp/root_cause.txt
-          echo "$SUGGESTED_APPROACH" > /tmp/suggested_approach.txt
-          echo "$AUTO_FIX_RATIONALE" > /tmp/auto_fix_rationale.txt
+          # Output to GitHub Actions
+          echo "$PARSED" >> $GITHUB_OUTPUT
 
       - name: Post Analysis Comment
         if: steps.check.outputs.skip != 'true'

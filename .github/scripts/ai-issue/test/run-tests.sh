@@ -229,7 +229,7 @@ if [ "$STAGE_FILTER" = "all" ] || [ "$STAGE_FILTER" = "1" ]; then
   echo "Stage 1: Triage"
   echo "----------------------------------------"
 
-  for case_file in "$CASES_DIR/stage1-quick"/*.json; do
+  for case_file in "$CASES_DIR/stage1"/*.json; do
     if [ -n "$CASE_FILTER" ] && [[ ! "$(basename "$case_file")" =~ $CASE_FILTER ]]; then
       continue
     fi
@@ -243,7 +243,7 @@ if [ "$STAGE_FILTER" = "all" ] || [ "$STAGE_FILTER" = "2" ]; then
   echo "Stage 2: Analyze"
   echo "----------------------------------------"
 
-  for case_file in "$CASES_DIR/stage2-deep"/*.json; do
+  for case_file in "$CASES_DIR/stage2"/*.json; do
     if [ -n "$CASE_FILTER" ] && [[ ! "$(basename "$case_file")" =~ $CASE_FILTER ]]; then
       continue
     fi

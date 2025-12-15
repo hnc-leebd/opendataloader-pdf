@@ -33,39 +33,37 @@ jobs:
         run: |
           echo "=== Trigger Check ==="
           echo "Event: ${{ github.event_name }}"
+          echo "Input issue_number: ${{ inputs.issue_number }}"
 
           SHOULD_RUN="false"
           SKIP_REASON=""
           NEEDS_AUTH="false"
 
-          case "${{ github.event_name }}" in
-            workflow_dispatch|workflow_call)
-              echo "✅ Trigger via ${{ github.event_name }}"
-              SHOULD_RUN="true"
-              ;;
-            issue_comment)
-              # Manual trigger via @ai-issue analyze command (requires CODEOWNERS auth)
-              COMMENT_BODY="${{ github.event.comment.body }}"
-              COMMENTER_TYPE="${{ github.event.comment.user.type }}"
-              echo "Comment body: $COMMENT_BODY"
-              echo "Commenter type: $COMMENTER_TYPE"
+          # Check if called via workflow_call (inputs.issue_number is set)
+          if [ -n "${{ inputs.issue_number }}" ]; then
+            echo "✅ Trigger via workflow_call or workflow_dispatch (issue_number=${{ inputs.issue_number }})"
+            SHOULD_RUN="true"
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+            # Manual trigger via @ai-issue analyze command (requires CODEOWNERS auth)
+            COMMENT_BODY="${{ github.event.comment.body }}"
+            COMMENTER_TYPE="${{ github.event.comment.user.type }}"
+            echo "Comment body: $COMMENT_BODY"
+            echo "Commenter type: $COMMENTER_TYPE"
 
-              if echo "$COMMENT_BODY" | grep -q "@ai-issue analyze"; then
-                if [ "$COMMENTER_TYPE" != "Bot" ]; then
-                  echo "✅ @ai-issue analyze command detected from non-bot user"
-                  SHOULD_RUN="true"
-                  NEEDS_AUTH="true"
-                else
-                  SKIP_REASON="@ai-issue analyze command from Bot is ignored"
-                fi
+            if echo "$COMMENT_BODY" | grep -q "@ai-issue analyze"; then
+              if [ "$COMMENTER_TYPE" != "Bot" ]; then
+                echo "✅ @ai-issue analyze command detected from non-bot user"
+                SHOULD_RUN="true"
+                NEEDS_AUTH="true"
               else
-                SKIP_REASON="Comment does not contain '@ai-issue analyze' command"
+                SKIP_REASON="@ai-issue analyze command from Bot is ignored"
               fi
-              ;;
-            *)
-              SKIP_REASON="Unknown event type: ${{ github.event_name }}"
-              ;;
-          esac
+            else
+              SKIP_REASON="Comment does not contain '@ai-issue analyze' command"
+            fi
+          else
+            SKIP_REASON="Unknown trigger: event=${{ github.event_name }}, no issue_number input"
+          fi
 
           echo "should_run=$SHOULD_RUN" >> $GITHUB_OUTPUT
           echo "skip_reason=$SKIP_REASON" >> $GITHUB_OUTPUT

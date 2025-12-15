@@ -214,12 +214,6 @@ echo "AI Issue Test Runner"
 echo "========================================"
 echo ""
 
-# Check API key
-if [ -z "${ANTHROPIC_API_KEY:-}" ] && ! $DRY_RUN; then
-  log_warn "ANTHROPIC_API_KEY not set. Use --dry-run to test without API calls."
-  exit 1
-fi
-
 # Run Stage 1 tests
 if [ "$STAGE_FILTER" = "all" ] || [ "$STAGE_FILTER" = "1" ]; then
   echo "Stage 1: Triage"

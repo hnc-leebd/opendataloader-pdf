@@ -23,11 +23,6 @@ if [ -z "$PROMPT_FILE" ] || [ ! -f "$PROMPT_FILE" ]; then
   exit 1
 fi
 
-if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-  echo "Error: ANTHROPIC_API_KEY environment variable required" >&2
-  exit 1
-fi
-
 # Run Claude Code CLI
 RESULT=$(cat "$PROMPT_FILE" | npx -y @anthropic-ai/claude-code \
   --print \

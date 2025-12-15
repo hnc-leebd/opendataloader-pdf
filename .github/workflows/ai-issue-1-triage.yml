@@ -228,5 +228,5 @@ jobs:
     if: needs.triage.outputs.decision == 'ai-issue/valid'
     uses: ./.github/workflows/ai-issue-2-analyze.yml
     with:
-      issue_number: ${{ needs.triage.outputs.issue_number }}
+      issue_number: ${{ fromJson(needs.triage.outputs.issue_number) }}
     secrets: inherit

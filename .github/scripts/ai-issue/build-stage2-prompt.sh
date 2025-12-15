@@ -29,16 +29,16 @@ AI_FIX_CRITERIA=""
 ISSUE_POLICY=""
 MEMBERS=""
 
-if [ -f "$SKILL_DIR/ai-fix-criteria.md" ]; then
-  AI_FIX_CRITERIA=$(cat "$SKILL_DIR/ai-fix-criteria.md")
+if [ -f "$SKILL_DIR/ai-fix-criteria.yml" ]; then
+  AI_FIX_CRITERIA=$(cat "$SKILL_DIR/ai-fix-criteria.yml")
 fi
 
-if [ -f "$SKILL_DIR/issue-policy.md" ]; then
-  ISSUE_POLICY=$(cat "$SKILL_DIR/issue-policy.md")
+if [ -f "$SKILL_DIR/issue-policy.yml" ]; then
+  ISSUE_POLICY=$(cat "$SKILL_DIR/issue-policy.yml")
 fi
 
-if [ -f "$SKILL_DIR/members.md" ]; then
-  MEMBERS=$(cat "$SKILL_DIR/members.md")
+if [ -f "$SKILL_DIR/members.yml" ]; then
+  MEMBERS=$(cat "$SKILL_DIR/members.yml")
 fi
 
 # Build codebase instruction
@@ -66,21 +66,28 @@ Use the ai-issue skill to:
    - What the issue is about
    - Which files/components are involved
    - How the current implementation works
-3. Decide action: "fix/auto-eligible", "fix/manual-required", or "respond/comment-only"
-   - Use ai-fix-criteria.md to determine if auto-fix is appropriate
-   - Use "respond/comment-only" when no code change is needed:
-     * User didn't find existing feature (guide them to it)
-     * Documentation question (point to docs)
-     * Feature request requiring roadmap review
-     * External dependency issue (not our problem)
-     * Need more information to reproduce
-     * Duplicate of existing issue
-     * Working as designed (won't fix)
-4. Select appropriate labels, priority, and estimate based on issue-policy.md
-5. Recommend the best available team member from members.md (skip if respond/comment-only)
+3. **Score the issue** using the 4-axis scoring system in ai-fix-criteria.yml:
+   - Scope (0-30): Change scope and complexity
+   - Risk (0-30): Failure risk level
+   - Verifiability (0-25): Verification capability
+   - Clarity (0-15): Requirement clarity
+4. Decide action based on total score vs threshold:
+   - score >= threshold → "fix/auto-eligible"
+   - score < threshold → "fix/manual-required"
+   - no code change needed → "respond/comment-only"
+5. For "respond/comment-only", use when:
+   - User didn't find existing feature (guide them to it)
+   - Documentation question (point to docs)
+   - Feature request requiring roadmap review
+   - External dependency issue (not our problem)
+   - Need more information to reproduce
+   - Duplicate of existing issue
+   - Working as designed (won't fix)
+6. Select appropriate labels, priority, and estimate based on issue-policy.yml
+7. Recommend the best available team member from members.yml (skip if respond/comment-only)
 
-## AI Fix Criteria
-${AI_FIX_CRITERIA:-Use standard criteria: simple bugs, typos, type errors are auto-fixable. Architecture changes, security issues require manual review.}
+## AI Fix Criteria (Scoring System)
+${AI_FIX_CRITERIA:-Use standard criteria with threshold 70.}
 
 ## Issue Policy
 ${ISSUE_POLICY:-Priority: P0 (critical), P1 (important), P2 (normal). Story points: 1, 2, 3, 5, 8.}
@@ -92,6 +99,16 @@ ${MEMBERS:-Available: benedict (available)}
 Respond with JSON only (no markdown code blocks):
 {
   "action": "fix/auto-eligible" | "fix/manual-required" | "respond/comment-only",
+  "score": {
+    "total": <number 0-100>,
+    "threshold": <number from ai-fix-criteria.yml>,
+    "breakdown": {
+      "scope": { "score": <0-30>, "reason": "explanation" },
+      "risk": { "score": <0-30>, "reason": "explanation" },
+      "verifiability": { "score": <0-25>, "reason": "explanation" },
+      "clarity": { "score": <0-15>, "reason": "explanation" }
+    }
+  },
   "labels": ["bug", "enhancement", "documentation", ...],
   "priority": "P0" | "P1" | "P2",
   "estimated": 1 | 2 | 3 | 5 | 8,
@@ -104,7 +121,6 @@ Respond with JSON only (no markdown code blocks):
     "root_cause": "Technical explanation of why the issue occurs (if identifiable)",
     "suggested_approach": "How to fix or implement this"
   },
-  "action_rationale": "Why this action was chosen (reference ai-fix-criteria.md)",
   "comment_draft": "(Only for respond/comment-only) Draft response to post on the issue"
 }
 PROMPT_EOF

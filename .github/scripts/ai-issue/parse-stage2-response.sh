@@ -7,11 +7,13 @@
 # Also writes analysis fields to files in output_dir (default: /tmp)
 #
 # Outputs to stdout:
-#   action=fix/auto-eligible|fix/manual-required
+#   action=fix/auto-eligible|fix/manual-required|respond/comment-only
 #   labels=["label1", "label2"]
 #   priority=P0|P1|P2
 #   estimated=1|2|3|5|8
 #   assignee=github_id
+#   score_total=<number>
+#   score_threshold=<number>
 #
 # Outputs to files (in output_dir):
 #   analysis_summary.txt
@@ -20,7 +22,7 @@
 #   affected_files.txt
 #   root_cause.txt
 #   suggested_approach.txt
-#   auto_fix_rationale.txt
+#   score_breakdown.txt
 
 set -euo pipefail
 
@@ -86,12 +88,18 @@ PRIORITY=$(echo "$PARSED_JSON" | jq -r '.priority // "P2"')
 ESTIMATED=$(echo "$PARSED_JSON" | jq -r '.estimated // 3')
 ASSIGNEE=$(echo "$PARSED_JSON" | jq -r '.assignee // ""' | tr -d '@')
 
+# Parse score fields
+SCORE_TOTAL=$(echo "$PARSED_JSON" | jq -r '.score.total // 0')
+SCORE_THRESHOLD=$(echo "$PARSED_JSON" | jq -r '.score.threshold // 70')
+
 # Output for GitHub Actions (single-line values)
 echo "action=$ACTION"
 echo "labels=$LABELS"
 echo "priority=$PRIORITY"
 echo "estimated=$ESTIMATED"
 echo "assignee=$ASSIGNEE"
+echo "score_total=$SCORE_TOTAL"
+echo "score_threshold=$SCORE_THRESHOLD"
 
 # Write analysis fields to files (for multi-line content)
 echo "$PARSED_JSON" | jq -r '.analysis.summary // "Unable to analyze"' > "$OUTPUT_DIR/analysis_summary.txt"
@@ -100,4 +108,25 @@ echo "$PARSED_JSON" | jq -r '.analysis.current_behavior // ""' > "$OUTPUT_DIR/cu
 echo "$PARSED_JSON" | jq -r '.analysis.affected_files // [] | join(", ")' > "$OUTPUT_DIR/affected_files.txt"
 echo "$PARSED_JSON" | jq -r '.analysis.root_cause // ""' > "$OUTPUT_DIR/root_cause.txt"
 echo "$PARSED_JSON" | jq -r '.analysis.suggested_approach // ""' > "$OUTPUT_DIR/suggested_approach.txt"
-echo "$PARSED_JSON" | jq -r '.auto_fix_rationale // ""' > "$OUTPUT_DIR/auto_fix_rationale.txt"
+
+# Write score breakdown to file (markdown table format)
+{
+  echo "| Criteria | Max | Score | Reason |"
+  echo "|----------|-----|-------|--------|"
+
+  SCOPE_SCORE=$(echo "$PARSED_JSON" | jq -r '.score.breakdown.scope.score // 0')
+  SCOPE_REASON=$(echo "$PARSED_JSON" | jq -r '.score.breakdown.scope.reason // ""')
+  echo "| Scope | 30 | $SCOPE_SCORE | $SCOPE_REASON |"
+
+  RISK_SCORE=$(echo "$PARSED_JSON" | jq -r '.score.breakdown.risk.score // 0')
+  RISK_REASON=$(echo "$PARSED_JSON" | jq -r '.score.breakdown.risk.reason // ""')
+  echo "| Risk | 30 | $RISK_SCORE | $RISK_REASON |"
+
+  VERIFY_SCORE=$(echo "$PARSED_JSON" | jq -r '.score.breakdown.verifiability.score // 0')
+  VERIFY_REASON=$(echo "$PARSED_JSON" | jq -r '.score.breakdown.verifiability.reason // ""')
+  echo "| Verifiability | 25 | $VERIFY_SCORE | $VERIFY_REASON |"
+
+  CLARITY_SCORE=$(echo "$PARSED_JSON" | jq -r '.score.breakdown.clarity.score // 0')
+  CLARITY_REASON=$(echo "$PARSED_JSON" | jq -r '.score.breakdown.clarity.reason // ""')
+  echo "| Clarity | 15 | $CLARITY_SCORE | $CLARITY_REASON |"
+} > "$OUTPUT_DIR/score_breakdown.txt"

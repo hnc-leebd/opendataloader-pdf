@@ -133,10 +133,10 @@ export function run(inputPath: string, options: RunOptions = {}): Promise<string
       args.push('--no-json');
     }
     if (options.useStructTree) {
-      args.push('--use-struct-tree')
+      args.push('--use-struct-tree');
     }
     if (options.readingOrder) {
-      args.push('--reading-order', options.readingOrder)
+      args.push('--reading-order', options.readingOrder);
     }
 
     args.push(inputPath);
@@ -161,7 +161,10 @@ export interface ConvertOptions {
   readingOrder?: string;
 }
 
-export function convert(inputPaths: string | string[], options: ConvertOptions = {}): Promise<string> {
+export function convert(
+  inputPaths: string | string[],
+  options: ConvertOptions = {},
+): Promise<string> {
   const inputList = Array.isArray(inputPaths) ? inputPaths : [inputPaths];
   if (inputList.length === 0) {
     return Promise.reject(new Error('At least one input path must be provided.'));
@@ -204,10 +207,10 @@ export function convert(inputPaths: string | string[], options: ConvertOptions =
     args.push('--replace-invalid-chars', options.replaceInvalidChars);
   }
   if (options.useStructTree) {
-    args.push('--use-struct-tree')
+    args.push('--use-struct-tree');
   }
   if (options.readingOrder) {
-      args.push('--reading-order', options.readingOrder)
+    args.push('--reading-order', options.readingOrder);
   }
 
   return executeJar(args, {

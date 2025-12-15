@@ -55,7 +55,7 @@ describe('opendataloader-pdf', () => {
 
     await convert([inputPdf], {
       outputDir: convertDir,
-      format: ['json', 'text', 'html', 'pdf', 'markdown']
+      format: ['json', 'text', 'html', 'pdf', 'markdown'],
     });
 
     expect(fs.existsSync(path.join(convertDir, '1901.03003.json'))).toBe(true);
@@ -63,5 +63,40 @@ describe('opendataloader-pdf', () => {
     expect(fs.existsSync(path.join(convertDir, '1901.03003.html'))).toBe(true);
     expect(fs.existsSync(path.join(convertDir, '1901.03003.md'))).toBe(true);
     expect(fs.existsSync(path.join(convertDir, '1901.03003_annotated.pdf'))).toBe(true);
+  }, 30000);
+
+  it('should process PDF with useStructTree and readingOrder options', async () => {
+    const structTreeDir = path.join(tempDir, 'structtree');
+    if (fs.existsSync(structTreeDir)) {
+      fs.rmSync(structTreeDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(structTreeDir);
+
+    await run(inputPdf, {
+      outputFolder: structTreeDir,
+      useStructTree: true,
+      readingOrder: 'natural',
+      generateMarkdown: true,
+    });
+
+    expect(fs.existsSync(path.join(structTreeDir, '1901.03003.json'))).toBe(true);
+    expect(fs.existsSync(path.join(structTreeDir, '1901.03003.md'))).toBe(true);
+  }, 30000);
+
+  it('should convert PDF with useStructTree and readingOrder options', async () => {
+    const structTreeConvertDir = path.join(tempDir, 'structtree-convert');
+    if (fs.existsSync(structTreeConvertDir)) {
+      fs.rmSync(structTreeConvertDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(structTreeConvertDir);
+
+    await convert([inputPdf], {
+      outputDir: structTreeConvertDir,
+      useStructTree: true,
+      readingOrder: 'visual',
+      format: 'json',
+    });
+
+    expect(fs.existsSync(path.join(structTreeConvertDir, '1901.03003.json'))).toBe(true);
   }, 30000);
 });

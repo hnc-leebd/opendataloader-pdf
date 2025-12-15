@@ -7,12 +7,21 @@ on:
         description: 'Issue number to fix'
         required: true
         type: number
+  issue_comment:
+    types: [created]
 
 env:
   DAILY_LIMIT: 3
 
 jobs:
   fix:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body, '@ai-issue fix') &&
+        github.event.comment.user.type != 'Bot'
+      )
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -21,12 +30,38 @@ jobs:
       actions: read
 
     steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'issue_comment'
+
+      - name: Check CODEOWNERS permission
+        if: github.event_name == 'issue_comment'
+        id: auth
+        run: |
+          COMMENTER="${{ github.event.comment.user.login }}"
+
+          # Parse CODEOWNERS file - extract all @usernames
+          OWNERS=$(grep -oE '@[a-zA-Z0-9_-]+' .github/CODEOWNERS | sort -u | tr '\n' ' ')
+
+          if echo "$OWNERS" | grep -qw "@$COMMENTER"; then
+            echo "authorized=true" >> $GITHUB_OUTPUT
+            echo "✅ $COMMENTER is a CODEOWNER"
+          else
+            echo "authorized=false" >> $GITHUB_OUTPUT
+            echo "❌ $COMMENTER is not a CODEOWNER"
+          fi
+
       - name: Check preconditions
+        if: github.event_name == 'workflow_dispatch' || steps.auth.outputs.authorized == 'true'
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ISSUE_NUM=${{ inputs.issue_number }}
+          else
+            ISSUE_NUM=${{ github.event.issue.number }}
+          fi
+          echo "issue_num=$ISSUE_NUM" >> $GITHUB_OUTPUT
 
           # Check daily limit
           TODAY=$(date -u +%Y-%m-%d)
@@ -44,14 +79,7 @@ jobs:
           # Check labels
           LABELS=$(gh issue view $ISSUE_NUM --repo ${{ github.repository }} --json labels --jq '.labels[].name')
 
-          # Must have fix/auto-eligible label
-          if ! echo "$LABELS" | grep -q "fix/auto-eligible"; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Issue not marked as fix/auto-eligible (Stage 2 did not approve)" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Must have ai-issue/analyzed label
+          # Must have ai-issue/analyzed label (for workflow_dispatch; issue_comment already checks this in job condition)
           if ! echo "$LABELS" | grep -q "ai-issue/analyzed"; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "reason=Issue not analyzed (Stage 2 not completed)" >> $GITHUB_OUTPUT
@@ -73,7 +101,7 @@ jobs:
           echo "⚠️ Skipping: ${{ steps.check.outputs.reason }}"
 
       - uses: actions/checkout@v4
-        if: steps.check.outputs.skip != 'true'
+        if: github.event_name == 'workflow_dispatch' && steps.check.outputs.skip != 'true'
 
       - name: Setup Node.js
         if: steps.check.outputs.skip != 'true'
@@ -87,7 +115,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          ISSUE_NUM=${{ steps.check.outputs.issue_num }}
 
           # Get full issue details including comments
           gh issue view $ISSUE_NUM --json title,body,labels,comments > /tmp/issue.json
@@ -111,7 +139,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          ISSUE_NUM=${{ steps.check.outputs.issue_num }}
           ISSUE_TITLE="${{ steps.context.outputs.title }}"
           ISSUE_BODY=$(cat /tmp/issue_body.txt 2>/dev/null || echo "")
           ALL_COMMENTS=$(cat /tmp/all_comments.txt 2>/dev/null || echo "No comments")
@@ -218,7 +246,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.fix.outputs.branch }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          ISSUE_NUM=${{ steps.check.outputs.issue_num }}
           ISSUE_TITLE="${{ steps.context.outputs.title }}"
 
           SUMMARY_SECTION=$(cat /tmp/fix_summary.txt)
@@ -275,7 +303,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ steps.pr.outputs.pr_url }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          ISSUE_NUM=${{ steps.check.outputs.issue_num }}
 
           COMMENT=$(cat <<EOF
           ## 🎉 Auto-Fix Complete
@@ -302,7 +330,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FAIL_REASON: ${{ steps.fix.outputs.fail_reason }}
         run: |
-          ISSUE_NUM=${{ inputs.issue_number }}
+          ISSUE_NUM=${{ steps.check.outputs.issue_num }}
 
           COMMENT=$(cat <<EOF
           ## ⚠️ Auto-Fix Failed

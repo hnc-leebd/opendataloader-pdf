@@ -1,8 +1,6 @@
 name: "AI Issue: Stage 2 - Analyze"
 
 on:
-  issues:
-    types: [labeled]
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -38,24 +36,21 @@ jobs:
               echo "✅ Manual trigger via workflow_dispatch"
               SHOULD_RUN="true"
               ;;
-            issues)
-              LABEL="${{ github.event.label.name }}"
-              echo "Label added: $LABEL"
-              if [ "$LABEL" = "ai-issue/valid" ]; then
-                echo "✅ ai-issue/valid label added (from Stage 1)"
-                SHOULD_RUN="true"
-              else
-                SKIP_REASON="Label '$LABEL' is not 'ai-issue/valid' - Stage 2 only triggers on ai-issue/valid label"
-              fi
-              ;;
             issue_comment)
-              LABELS="${{ join(github.event.issue.labels.*.name, ',') }}"
-              echo "Issue labels: $LABELS"
-              if echo "$LABELS" | grep -q "ai-issue/needs-info"; then
-                echo "✅ Comment on issue with ai-issue/needs-info label (user responded)"
-                SHOULD_RUN="true"
+              COMMENT_BODY="${{ github.event.comment.body }}"
+              COMMENTER_TYPE="${{ github.event.comment.user.type }}"
+              echo "Comment body: $COMMENT_BODY"
+              echo "Commenter type: $COMMENTER_TYPE"
+
+              if echo "$COMMENT_BODY" | grep -q "@ai-issue analyze"; then
+                if [ "$COMMENTER_TYPE" != "Bot" ]; then
+                  echo "✅ @ai-issue analyze command detected from non-bot user"
+                  SHOULD_RUN="true"
+                else
+                  SKIP_REASON="@ai-issue analyze command from Bot is ignored"
+                fi
               else
-                SKIP_REASON="Issue does not have 'ai-issue/needs-info' label - Stage 2 only triggers on comments to issues awaiting user response"
+                SKIP_REASON="Comment does not contain '@ai-issue analyze' command"
               fi
               ;;
             *)
@@ -70,8 +65,31 @@ jobs:
             echo "⚠️ Skipping: $SKIP_REASON"
           fi
 
+      - uses: actions/checkout@v4
+        if: steps.trigger.outputs.should_run == 'true' && github.event_name == 'issue_comment'
+
+      - name: Check CODEOWNERS permission
+        if: steps.trigger.outputs.should_run == 'true' && github.event_name == 'issue_comment'
+        id: auth
+        run: |
+          COMMENTER="${{ github.event.comment.user.login }}"
+
+          # Parse CODEOWNERS file - extract all @usernames
+          OWNERS=$(grep -oE '@[a-zA-Z0-9_-]+' .github/CODEOWNERS | sort -u | tr '\n' ' ')
+
+          echo "CODEOWNERS: $OWNERS"
+          echo "Commenter: @$COMMENTER"
+
+          if echo "$OWNERS" | grep -qw "@$COMMENTER"; then
+            echo "authorized=true" >> $GITHUB_OUTPUT
+            echo "✅ $COMMENTER is a CODEOWNER"
+          else
+            echo "authorized=false" >> $GITHUB_OUTPUT
+            echo "❌ $COMMENTER is not a CODEOWNER"
+          fi
+
       - name: Check preconditions
-        if: steps.trigger.outputs.should_run == 'true'
+        if: steps.trigger.outputs.should_run == 'true' && (github.event_name == 'workflow_dispatch' || steps.auth.outputs.authorized == 'true')
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -107,35 +125,33 @@ jobs:
             exit 0
           fi
 
-          # Check if valid or needs-info (passed Stage 1)
-          if ! echo "$LABELS" | grep -qE "ai-issue/valid|ai-issue/needs-info"; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Issue not marked as ai-issue/valid or ai-issue/needs-info (Stage 1 not passed)" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
           echo "skip=false" >> $GITHUB_OUTPUT
 
       - name: Skip notification
-        if: steps.trigger.outputs.should_run != 'true' || steps.check.outputs.skip == 'true'
+        if: |
+          steps.trigger.outputs.should_run != 'true' ||
+          (github.event_name == 'issue_comment' && steps.auth.outputs.authorized != 'true') ||
+          steps.check.outputs.skip == 'true'
         run: |
           if [ "${{ steps.trigger.outputs.should_run }}" != "true" ]; then
             echo "⚠️ Trigger condition not met: ${{ steps.trigger.outputs.skip_reason }}"
+          elif [ "${{ github.event_name }}" = "issue_comment" ] && [ "${{ steps.auth.outputs.authorized }}" != "true" ]; then
+            echo "⚠️ Authorization failed: ${{ github.event.comment.user.login }} is not a CODEOWNER"
           else
             echo "⚠️ Precondition not met: ${{ steps.check.outputs.reason }}"
           fi
 
       - uses: actions/checkout@v4
-        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip == 'false'
 
       - name: Setup Node.js
-        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip == 'false'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Gather context
-        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip == 'false'
         id: context
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -146,7 +162,7 @@ jobs:
           gh issue view $ISSUE_NUM --json title,body,labels,comments > /tmp/issue.json
 
       - name: Run analysis
-        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip == 'false'
         id: analysis
         timeout-minutes: 15
         env:
@@ -175,7 +191,7 @@ jobs:
           echo "$PARSED" >> $GITHUB_OUTPUT
 
       - name: Post analysis comment
-        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ASSIGNEE: ${{ steps.analysis.outputs.assignee }}
@@ -271,7 +287,7 @@ jobs:
           fi
 
       - name: Update labels
-        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LABELS: ${{ steps.analysis.outputs.labels }}
@@ -303,7 +319,7 @@ jobs:
           eval gh issue edit $ISSUE_NUM $LABEL_ARGS
 
       - name: Log Stage 3 eligibility
-        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'fix/auto-eligible'
+        if: steps.check.outputs.skip == 'false' && steps.analysis.outputs.action == 'fix/auto-eligible'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

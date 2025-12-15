@@ -26,6 +26,9 @@ jobs:
       issues: write
       contents: read
       actions: read
+    outputs:
+      action: ${{ steps.analysis.outputs.action }}
+      issue_number: ${{ steps.check.outputs.issue_number }}
 
     steps:
       - name: Check trigger conditions
@@ -331,5 +334,13 @@ jobs:
           ISSUE_NUM=${{ steps.check.outputs.issue_number }}
 
           echo "✅ Issue #$ISSUE_NUM is eligible for auto-fix"
-          echo "Has fix/auto-eligible label - Stage 3 can be triggered manually:"
-          echo "  gh workflow run ai-issue-3-fix.yml -f issue_number=$ISSUE_NUM"
+          echo "Automatically triggering Stage 3..."
+
+  # Call Stage 3 when analysis determines auto-fix is eligible
+  fix:
+    needs: analyze
+    if: needs.analyze.outputs.action == 'fix/auto-eligible'
+    uses: ./.github/workflows/ai-issue-3-fix.yml
+    with:
+      issue_number: ${{ fromJson(needs.analyze.outputs.issue_number) }}
+    secrets: inherit

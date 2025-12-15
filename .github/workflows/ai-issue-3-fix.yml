@@ -1,6 +1,12 @@
 name: "AI Issue: Stage 3 - Fix"
 
 on:
+  workflow_call:
+    inputs:
+      issue_number:
+        description: 'Issue number to fix'
+        required: true
+        type: number
   workflow_dispatch:
     inputs:
       issue_number:
@@ -16,6 +22,7 @@ env:
 jobs:
   fix:
     if: |
+      github.event_name == 'workflow_call' ||
       github.event_name == 'workflow_dispatch' ||
       (
         github.event_name == 'issue_comment' &&
@@ -51,12 +58,12 @@ jobs:
           fi
 
       - name: Check preconditions
-        if: github.event_name == 'workflow_dispatch' || steps.auth.outputs.authorized == 'true'
+        if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch' || steps.auth.outputs.authorized == 'true'
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "workflow_call" ]; then
             ISSUE_NUM=${{ inputs.issue_number }}
           else
             ISSUE_NUM=${{ github.event.issue.number }}
@@ -76,7 +83,13 @@ jobs:
             exit 0
           fi
 
-          # Check labels
+          # Skip label check for workflow_call (already validated by Stage 2)
+          if [ "${{ github.event_name }}" = "workflow_call" ]; then
+            echo "skip=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Check labels (for manual triggers only)
           LABELS=$(gh issue view $ISSUE_NUM --repo ${{ github.repository }} --json labels --jq '.labels[].name')
 
           # Must have fix/auto-eligible label
@@ -94,7 +107,7 @@ jobs:
           echo "⚠️ Skipping: ${{ steps.check.outputs.reason }}"
 
       - uses: actions/checkout@v4
-        if: github.event_name == 'workflow_dispatch' && steps.check.outputs.skip != 'true'
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && steps.check.outputs.skip != 'true'
 
       - name: Setup Node.js
         if: steps.check.outputs.skip != 'true'

@@ -210,8 +210,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "ai-issue/triaged,ai-issue/valid"
+          ISSUE_NUM=${{ github.event.issue.number || inputs.issue_number }}
+
+          # Add triaged label first
+          gh issue edit $ISSUE_NUM --add-label "ai-issue/triaged"
+
+          # Add valid label separately to ensure 'labeled' event triggers Stage 2
+          # When multiple labels are added in one call, only one 'labeled' event fires
+          gh issue edit $ISSUE_NUM --add-label "ai-issue/valid"
 
           echo "✓ Issue passed triage: ${{ steps.triage.outputs.reason }}"
           echo "Stage 2 will be triggered automatically by the ai-issue/valid label"

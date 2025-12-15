@@ -9,10 +9,12 @@ def process_pdf(file_path, skip_empty=False):
         skip_empty: If True, skip pages with no content (default: False)
     """
     if not file_path:
-        raise ValueError("Invlaid PDF format")  # TYPO: should be "Invalid"
+        raise ValueError("Invalid PDF format")
 
-    # BUG: No check for empty pages - causes error when PDF has no pages
     pages = load_pages(file_path)
+    # Handle empty PDFs gracefully
+    if pages is None:
+        return []
     if skip_empty:
         pages = [p for p in pages if p.has_content()]
     return [extract_text(p) for p in pages]
@@ -20,7 +22,7 @@ def process_pdf(file_path, skip_empty=False):
 
 def load_pages(file_path):
     """Load pages from PDF. Returns None for empty PDFs."""
-    return None  # BUG: returns None instead of empty list
+    return None  # Mock implementation: returns None for empty PDFs
 
 
 def extract_text(page):

@@ -32,7 +32,10 @@ function createProgram(): Command {
     .option('--keep-line-breaks', 'Preserve line breaks in text output')
     .option('--replace-invalid-chars <c>', 'Replacement character for invalid characters')
     .option('--use-struct-tree', 'Enable processing structure tree (disabled by default)')
-    .option('--reading-order <readingOrder>', 'Specifies reading order of content. Supported values: bbox');
+    .option(
+      '--reading-order <readingOrder>',
+      'Specifies reading order of content. Supported values: bbox',
+    );
 
   program.configureOutput({
     writeErr: (str) => {
@@ -74,7 +77,7 @@ function buildConvertOptions(options: CliOptions): ConvertOptions {
     convertOptions.useStructTree = true;
   }
   if (options.readingOrder) {
-      convertOptions.readingOrder = options.readingOrder;
+    convertOptions.readingOrder = options.readingOrder;
   }
 
   return convertOptions;

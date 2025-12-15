@@ -1,0 +1,44 @@
+# Issue Policy
+# Labels, priority definitions, and story point estimation
+
+# Type labels (choose ONE OR MORE)
+type_labels:
+  - name: type/bug
+    description: Bug report
+
+  - name: type/enhancement
+    description: Feature request or improvement
+
+  - name: type/docs
+    description: Documentation
+
+  - name: type/dependencies
+    description: Dependency update
+
+# Priority labels (choose exactly ONE)
+priority_labels:
+  - name: priority/P0
+    description: Highest priority; production blocking, severe regression, data loss
+
+  - name: priority/P1
+    description: Important but not immediately blocking
+
+  - name: priority/P2
+    description: Normal or low priority
+
+# Story points (choose exactly ONE)
+story_points:
+  - value: 1
+    description: Very simple, trivial work (less than 1 day)
+
+  - value: 2
+    description: Small task, low complexity, straightforward (1-2 days)
+
+  - value: 3
+    description: Medium task, average story size (3-5 days)
+
+  - value: 5
+    description: Large task, multiple steps and considerations (6-10 days)
+
+  - value: 8
+    description: Very large task, complex with higher uncertainty (more than 10 days)

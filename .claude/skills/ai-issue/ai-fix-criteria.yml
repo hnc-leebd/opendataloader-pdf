@@ -1,0 +1,34 @@
+# AI Fix Criteria
+# Determines whether an issue is eligible for automatic fixing
+
+suitable:
+  - name: Clear scope
+    description: Single file or few related files
+
+  - name: Predictable changes
+    description: Bug fixes, type errors, lint errors
+
+  - name: Test verifiable
+    description: Can confirm fix by running tests
+
+  - name: Low security risk
+    description: Not related to auth, permissions, encryption
+
+  - name: Existing patterns
+    description: Similar implementation exists in codebase
+
+not_suitable:
+  - name: Architecture changes
+    description: Requires design decisions
+
+  - name: Domain knowledge
+    description: Requires business logic understanding
+
+  - name: Human judgment
+    description: UX decisions, trade-off choices
+
+  - name: Wide impact
+    description: Affects many files or systems
+
+  - name: External dependencies
+    description: API changes, infrastructure config

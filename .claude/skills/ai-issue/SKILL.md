@@ -25,11 +25,12 @@ Three-stage AI system for automatic GitHub issue classification and processing.
 | File | Description |
 |------|-------------|
 | [workflow.md](workflow.md) | Detailed workflow (Stage 1/2/3 process, flowchart) |
-| [issue-policy.md](issue-policy.md) | Labels, priority (P0-P2), story points policy |
-| [ai-fix-criteria.md](ai-fix-criteria.md) | Criteria for AI auto-fix eligibility |
-| [members.md](members.md) | Team member list and availability |
-| [labels.md](labels.md) | Label naming conventions and definitions |
 | [testing.md](testing.md) | Test framework for validating decisions |
+| [issue-policy.yml](issue-policy.yml) | Labels, priority (P0-P2), story points policy |
+| [ai-fix-criteria.yml](ai-fix-criteria.yml) | Criteria for AI auto-fix eligibility |
+| [members.yml](members.yml) | Team member list and availability |
+| [labels.yml](labels.yml) | Label definitions (data source) |
+| [setup-labels.sh](setup-labels.sh) | Script to sync labels to GitHub |
 
 ## Key Decisions
 
@@ -37,6 +38,6 @@ Three-stage AI system for automatic GitHub issue classification and processing.
 
 | Action | Condition |
 |--------|-----------|
-| `fix/auto-eligible` | Meets criteria in ai-fix-criteria.md, creates PR |
-| `fix/manual-required` | Expert review required (see members.md) |
+| `fix/auto-eligible` | Meets criteria in ai-fix-criteria.yml, creates PR |
+| `fix/manual-required` | Expert review required (see members.yml) |
 | `respond/comment-only` | No code change needed, respond with comment (existing feature guidance, docs reference, roadmap review needed, external dependency, needs more info, duplicate, won't fix) |

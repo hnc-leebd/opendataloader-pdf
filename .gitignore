@@ -58,8 +58,3 @@ logs/
 **/temp/
 *.swp
 *.swo
-
-# Claude AI settings
-.claude/*
-!.claude/commands/
-!.claude/skills/

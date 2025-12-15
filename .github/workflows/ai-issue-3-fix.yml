@@ -40,11 +40,10 @@ jobs:
           SKIP_REASON=""
           NEEDS_AUTH="false"
 
-          if [ "${{ github.event_name }}" = "workflow_call" ]; then
-            echo "✅ Trigger via workflow_call (issue_number=${{ inputs.issue_number }})"
-            SHOULD_RUN="true"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "✅ Trigger via workflow_dispatch (issue_number=${{ inputs.issue_number }})"
+          # workflow_call passes inputs.issue_number, but github.event_name stays as original event (e.g., 'issues')
+          # So we detect workflow_call by checking if inputs.issue_number is set
+          if [ -n "${{ inputs.issue_number }}" ]; then
+            echo "✅ Trigger via workflow_call or workflow_dispatch (issue_number=${{ inputs.issue_number }})"
             SHOULD_RUN="true"
           elif [ "${{ github.event_name }}" = "issue_comment" ]; then
             COMMENT_BODY="${{ github.event.comment.body }}"
@@ -64,7 +63,7 @@ jobs:
               SKIP_REASON="Comment does not contain '@ai-issue fix' command"
             fi
           else
-            SKIP_REASON="Unknown trigger: event=${{ github.event_name }}"
+            SKIP_REASON="Unknown trigger: event=${{ github.event_name }}, no issue_number input"
           fi
 
           echo "should_run=$SHOULD_RUN" >> $GITHUB_OUTPUT
@@ -103,7 +102,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "workflow_call" ]; then
+          # inputs.issue_number is set for workflow_call and workflow_dispatch
+          if [ -n "${{ inputs.issue_number }}" ]; then
             ISSUE_NUM=${{ inputs.issue_number }}
           else
             ISSUE_NUM=${{ github.event.issue.number }}

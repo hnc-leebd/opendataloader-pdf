@@ -11,7 +11,7 @@ on:
         type: number
 
 env:
-  DAILY_LIMIT: 20  # Triage limit per day
+  DAILY_LIMIT: 100
 
 jobs:
   triage:

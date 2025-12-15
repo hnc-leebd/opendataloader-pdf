@@ -31,6 +31,7 @@ Three-stage AI system for automatic GitHub issue classification and processing.
 | [members.yml](members.yml) | Team member list and availability |
 | [labels.yml](labels.yml) | Label definitions (data source) |
 | [setup-labels.sh](setup-labels.sh) | Script to sync labels to GitHub |
+| [../../scripts/build-all.sh](../../../scripts/build-all.sh) | Build & test all packages (Java, Python, Node.js) |
 
 ## Key Decisions
 
@@ -41,3 +42,20 @@ Three-stage AI system for automatic GitHub issue classification and processing.
 | `fix/auto-eligible` | Meets criteria in ai-fix-criteria.yml, creates PR |
 | `fix/manual-required` | Expert review required (see members.yml) |
 | `respond/comment-only` | No code change needed, respond with comment (existing feature guidance, docs reference, roadmap review needed, external dependency, needs more info, duplicate, won't fix) |
+
+## Build & Test
+
+Before creating a PR (Stage 3), **MUST** run the build script to verify all packages build and test successfully.
+
+```bash
+# Build and test all packages (Java → Python → Node.js)
+./scripts/build-all.sh
+
+# With specific version
+./scripts/build-all.sh 1.0.0
+```
+
+**Requirements:**
+- All three builds (Java, Python, Node.js) must pass
+- All tests must pass
+- Script exits immediately on first failure (`set -e`)

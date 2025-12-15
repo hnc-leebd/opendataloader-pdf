@@ -35,6 +35,11 @@
 - Determine implementation complexity
 - Decide if auto-fix is appropriate
 
+**Build & Test Script:**
+- Use `./scripts/build-all.sh` to verify builds pass
+- Script builds and tests Java → Python → Node.js in sequence
+- Usage: `./scripts/build-all.sh [VERSION]` (default: 0.0.0)
+
 **Outputs:**
 - Detailed analysis comment on the issue:
   - Summary of the problem
@@ -105,8 +110,14 @@
 2. Use analysis to understand affected files and approach
 3. Write test (if applicable)
 4. Implement fix
-5. Verify tests and build pass
+5. Verify tests and build pass using `./scripts/build-all.sh`
 6. Create PR
+
+**Build & Test Script:**
+- **MUST** run `./scripts/build-all.sh` before creating PR
+- Script builds and tests Java → Python → Node.js in sequence
+- All builds must pass before PR creation
+- Usage: `./scripts/build-all.sh [VERSION]` (default: 0.0.0)
 
 **Outcomes:**
 - Success → PR created, add `ai-issue/fixed` label

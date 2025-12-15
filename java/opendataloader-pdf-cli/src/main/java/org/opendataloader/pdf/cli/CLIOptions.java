@@ -36,7 +36,7 @@ public class CLIOptions {
 
     public static final String FORMAT_OPTION = "f";
     private static final String FORMAT_LONG_OPTION = "format";
-    private static final String FORMAT_SUPPORTED_LIST = "json, text, html, pdf, markdown, markdown-with-html, markdown-with-images";
+    private static final String FORMAT_SUPPORTED_LIST = "json, text, html, pdf, markdown, markdown-with-html, markdown-with-images, json-with-images";
 
     public static final String QUIET_OPTION = "q";
     private static final String QUIET_LONG_OPTION = "quiet";
@@ -52,6 +52,8 @@ public class CLIOptions {
     public static final String HTML_REPORT_LONG_OPTION = "html";
 
     private static final String MARKDOWN_IMAGE_LONG_OPTION = "markdown-with-images";
+
+    private static final String JSON_IMAGE_LONG_OPTION = "json-with-images";
 
     public static final String NO_JSON_REPORT_LONG_OPTION = "no-json";
 
@@ -93,6 +95,9 @@ public class CLIOptions {
         Option imageSupport = new Option(null, MARKDOWN_IMAGE_LONG_OPTION, false, "Sets the data extraction output format to Markdown with extracting images from the PDF and includes them as links");
         imageSupport.setRequired(false);
         options.addOption(imageSupport);
+        Option jsonImageSupport = new Option(null, JSON_IMAGE_LONG_OPTION, false, "Sets the data extraction output format to JSON with extracting images from the PDF and includes their file paths");
+        jsonImageSupport.setRequired(false);
+        options.addOption(jsonImageSupport);
         Option noJson = new Option(null, NO_JSON_REPORT_LONG_OPTION, false, "Disables the JSON output format.");
         noJson.setRequired(false);
         options.addOption(noJson);
@@ -133,6 +138,9 @@ public class CLIOptions {
         }
         if (commandLine.hasOption(CLIOptions.MARKDOWN_IMAGE_LONG_OPTION)) {
             config.setAddImageToMarkdown(true);
+        }
+        if (commandLine.hasOption(CLIOptions.JSON_IMAGE_LONG_OPTION)) {
+            config.setAddImageToJson(true);
         }
         if (commandLine.hasOption(CLIOptions.NO_JSON_REPORT_LONG_OPTION)) {
             config.setGenerateJSON(false);
@@ -240,6 +248,10 @@ public class CLIOptions {
                     break;
                 case "markdown-with-images":
                     config.setAddImageToMarkdown(true);
+                    break;
+                case "json-with-images":
+                    config.setAddImageToJson(true);
+                    config.setGenerateJSON(true);
                     break;
                 default:
                     throw new IllegalArgumentException(String.format("Unsupported format '%s'. Supported values: %s", value, FORMAT_SUPPORTED_LIST));

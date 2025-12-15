@@ -22,6 +22,7 @@ def run(
     content_safety_off: str = None,
     html_in_markdown: bool = False,
     add_image_to_markdown: bool = False,
+    add_image_to_json: bool = False,
     no_json: bool = False,
     debug: bool = False,
     use_struct_tree: bool = False,
@@ -41,6 +42,7 @@ def run(
         keep_line_breaks: If True, keeps line breaks in the output.
         html_in_markdown: If True, uses HTML in the Markdown output.
         add_image_to_markdown: If True, adds images to the Markdown output.
+        add_image_to_json: If True, adds image file paths to the JSON output.
         no_json: If True, disable the JSON output.
         debug: If True, prints all messages from the CLI to the console during execution.
         use_struct_tree: If True, enable processing structure tree (disabled by default)
@@ -79,6 +81,8 @@ def run(
         args.append("--markdown-with-html")
     if add_image_to_markdown:
         args.append("--markdown-with-images")
+    if add_image_to_json:
+        args.append("--json-with-images")
     if no_json:
         args.append("--no-json")
     if use_struct_tree:
@@ -110,7 +114,7 @@ def convert(
         input_path: One or more input PDF file paths or directories
         output_dir: Directory where outputs are written
         password: Password for encrypted PDFs
-        format: Comma-separated output formats to generate (json, text, html, pdf, markdown, markdown-with-html, markdown-with-images)
+        format: Comma-separated output formats to generate (json, text, html, pdf, markdown, markdown-with-html, markdown-with-images, json-with-images)
         quiet: Suppress CLI logging output
         content_safety_off: Disable one or more content safety filters (all, hidden-text, off-page, tiny, hidden-ocg)
         keep_line_breaks: Preserve line breaks in text output
@@ -238,7 +242,7 @@ def main(argv=None) -> int:
     parser.add_argument(
         "-f",
         "--format",
-        help="Comma-separated output formats to generate. (json, text, html, pdf, markdown, markdown-with-html, markdown-with-images)",
+        help="Comma-separated output formats to generate. (json, text, html, pdf, markdown, markdown-with-html, markdown-with-images, json-with-images)",
     )
     parser.add_argument(
         "-q",

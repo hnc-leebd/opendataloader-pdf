@@ -23,6 +23,7 @@ public class Config {
     private boolean useStructTree = false;
     private boolean useHTMLInMarkdown = false;
     private boolean addImageToMarkdown = false;
+    private boolean addImageToJson = false;
     private String replaceInvalidChars = " ";
     private String outputFolder;
     private String readingOrder;
@@ -208,6 +209,26 @@ public class Config {
      */
     public void setAddImageToMarkdown(boolean addImageToMarkdown) {
         this.addImageToMarkdown = addImageToMarkdown;
+    }
+
+    /**
+     * Checks if images should be extracted and included in the JSON output.
+     *
+     * @return true if images are included in JSON, false otherwise.
+     */
+    public boolean isAddImageToJson() {
+        return addImageToJson;
+    }
+
+    /**
+     * Enables or disables the inclusion of extracted images in JSON output.
+     * When enabled, images will be extracted to disk and their file paths
+     * will be included in the JSON output.
+     *
+     * @param addImageToJson true to include images, false otherwise.
+     */
+    public void setAddImageToJson(boolean addImageToJson) {
+        this.addImageToJson = addImageToJson;
     }
 
     /**

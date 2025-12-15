@@ -11,6 +11,8 @@ import com.fasterxml.jackson.core.JsonEncoding;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
+import org.opendataloader.pdf.api.Config;
+import org.opendataloader.pdf.containers.StaticLayoutContainers;
 import org.verapdf.as.ASAtom;
 import org.verapdf.cos.COSDictionary;
 import org.verapdf.cos.COSObjType;
@@ -37,8 +39,21 @@ public class JsonWriter {
                 .setCodec(ObjectMapperHolder.getObjectMapper());
     }
 
-    public static void writeToJson(File inputPDF, String outputFolder, List<List<IObject>> contents) throws IOException {
+    public static void writeToJson(File inputPDF, String outputFolder, List<List<IObject>> contents, Config config) throws IOException {
         String jsonFileName = outputFolder + File.separator + inputPDF.getName().substring(0, inputPDF.getName().length() - 3) + "json";
+
+        // Setup context for image extraction if enabled
+        if (config.isAddImageToJson()) {
+            String cutPdfFileName = inputPDF.getName();
+            String imageDirectoryName = outputFolder + File.separator +
+                cutPdfFileName.substring(0, cutPdfFileName.length() - 4) + "_images";
+            JsonSerializationContext.setImageDirectoryName(imageDirectoryName);
+            JsonSerializationContext.setPdfFileName(inputPDF.getAbsolutePath());
+            JsonSerializationContext.setPassword(config.getPassword());
+            JsonSerializationContext.setAddImageToJson(true);
+            StaticLayoutContainers.resetImageIndex();
+        }
+
         try (JsonGenerator jsonGenerator = getJsonGenerator(jsonFileName)) {
             jsonGenerator.writeStartObject();
             writeDocumentInfo(jsonGenerator, inputPDF.getName());
@@ -54,6 +69,11 @@ public class JsonWriter {
             LOGGER.log(Level.INFO, "Created {0}", jsonFileName);
         } catch (Exception ex) {
             LOGGER.log(Level.WARNING, "Unable to create JSON output: " + ex.getMessage());
+        } finally {
+            // Clean up context
+            if (config.isAddImageToJson()) {
+                JsonSerializationContext.clear();
+            }
         }
     }
 

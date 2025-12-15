@@ -93,7 +93,7 @@ public class DocumentProcessor {
             pdfWriter.updatePDF(inputPDF, config.getPassword(), config.getOutputFolder(), contents);
         }
         if (config.isGenerateJSON()) {
-            JsonWriter.writeToJson(inputPDF, config.getOutputFolder(), contents);
+            JsonWriter.writeToJson(inputPDF, config.getOutputFolder(), contents, config);
         }
         if (config.isGenerateMarkdown()) {
             try (MarkdownGenerator markdownGenerator = MarkdownGeneratorFactory.getMarkdownGenerator(inputPDF,

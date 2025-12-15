@@ -13,7 +13,7 @@ on:
         type: number
 
 env:
-  DAILY_LIMIT: 5
+  DAILY_LIMIT: 20
 
 jobs:
   analyze:
@@ -23,17 +23,55 @@ jobs:
       contents: read
       actions: read
 
-    # Run when:
-    # 1. workflow_dispatch (manual)
-    # 2. ai-issue/valid label added (from Stage 1)
-    # 3. comment on issue with ai-issue/needs-info label (user responded)
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issues' && github.event.label.name == 'ai-issue/valid') ||
-      (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'ai-issue/needs-info'))
-
     steps:
+      - name: Check trigger conditions
+        id: trigger
+        run: |
+          echo "=== Trigger Check ==="
+          echo "Event: ${{ github.event_name }}"
+
+          SHOULD_RUN="false"
+          SKIP_REASON=""
+
+          case "${{ github.event_name }}" in
+            workflow_dispatch)
+              echo "✅ Manual trigger via workflow_dispatch"
+              SHOULD_RUN="true"
+              ;;
+            issues)
+              LABEL="${{ github.event.label.name }}"
+              echo "Label added: $LABEL"
+              if [ "$LABEL" = "ai-issue/valid" ]; then
+                echo "✅ ai-issue/valid label added (from Stage 1)"
+                SHOULD_RUN="true"
+              else
+                SKIP_REASON="Label '$LABEL' is not 'ai-issue/valid' - Stage 2 only triggers on ai-issue/valid label"
+              fi
+              ;;
+            issue_comment)
+              LABELS="${{ join(github.event.issue.labels.*.name, ',') }}"
+              echo "Issue labels: $LABELS"
+              if echo "$LABELS" | grep -q "ai-issue/needs-info"; then
+                echo "✅ Comment on issue with ai-issue/needs-info label (user responded)"
+                SHOULD_RUN="true"
+              else
+                SKIP_REASON="Issue does not have 'ai-issue/needs-info' label - Stage 2 only triggers on comments to issues awaiting user response"
+              fi
+              ;;
+            *)
+              SKIP_REASON="Unknown event type: ${{ github.event_name }}"
+              ;;
+          esac
+
+          echo "should_run=$SHOULD_RUN" >> $GITHUB_OUTPUT
+          echo "skip_reason=$SKIP_REASON" >> $GITHUB_OUTPUT
+
+          if [ "$SHOULD_RUN" = "false" ]; then
+            echo "⚠️ Skipping: $SKIP_REASON"
+          fi
+
       - name: Check preconditions
+        if: steps.trigger.outputs.should_run == 'true'
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -79,21 +117,25 @@ jobs:
           echo "skip=false" >> $GITHUB_OUTPUT
 
       - name: Skip notification
-        if: steps.check.outputs.skip == 'true'
+        if: steps.trigger.outputs.should_run != 'true' || steps.check.outputs.skip == 'true'
         run: |
-          echo "⚠️ Skipping: ${{ steps.check.outputs.reason }}"
+          if [ "${{ steps.trigger.outputs.should_run }}" != "true" ]; then
+            echo "⚠️ Trigger condition not met: ${{ steps.trigger.outputs.skip_reason }}"
+          else
+            echo "⚠️ Precondition not met: ${{ steps.check.outputs.reason }}"
+          fi
 
       - uses: actions/checkout@v4
-        if: steps.check.outputs.skip != 'true'
+        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
 
       - name: Setup Node.js
-        if: steps.check.outputs.skip != 'true'
+        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Gather context
-        if: steps.check.outputs.skip != 'true'
+        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
         id: context
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -104,7 +146,7 @@ jobs:
           gh issue view $ISSUE_NUM --json title,body,labels,comments > /tmp/issue.json
 
       - name: Run analysis
-        if: steps.check.outputs.skip != 'true'
+        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
         id: analysis
         timeout-minutes: 15
         env:
@@ -133,7 +175,7 @@ jobs:
           echo "$PARSED" >> $GITHUB_OUTPUT
 
       - name: Post analysis comment
-        if: steps.check.outputs.skip != 'true'
+        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ASSIGNEE: ${{ steps.analysis.outputs.assignee }}
@@ -229,7 +271,7 @@ jobs:
           fi
 
       - name: Update labels
-        if: steps.check.outputs.skip != 'true'
+        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LABELS: ${{ steps.analysis.outputs.labels }}
@@ -261,7 +303,7 @@ jobs:
           eval gh issue edit $ISSUE_NUM $LABEL_ARGS
 
       - name: Log Stage 3 eligibility
-        if: steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'fix/auto-eligible'
+        if: steps.trigger.outputs.should_run == 'true' && steps.check.outputs.skip != 'true' && steps.analysis.outputs.action == 'fix/auto-eligible'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -20,6 +20,9 @@ jobs:
       issues: write
       contents: read
       actions: read
+    outputs:
+      decision: ${{ steps.triage.outputs.decision }}
+      issue_number: ${{ steps.valid.outputs.issue_number }}
 
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -207,17 +210,23 @@ jobs:
 
       - name: "Result: Pass to Stage 2"
         if: steps.triage.outputs.decision == 'ai-issue/valid'
+        id: valid
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ISSUE_NUM=${{ github.event.issue.number || inputs.issue_number }}
+          echo "issue_number=$ISSUE_NUM" >> $GITHUB_OUTPUT
 
-          # Add triaged label first
-          gh issue edit $ISSUE_NUM --add-label "ai-issue/triaged"
-
-          # Add valid label separately to ensure 'labeled' event triggers Stage 2
-          # When multiple labels are added in one call, only one 'labeled' event fires
-          gh issue edit $ISSUE_NUM --add-label "ai-issue/valid"
+          # Add labels
+          gh issue edit $ISSUE_NUM --add-label "ai-issue/triaged,ai-issue/valid"
 
           echo "✓ Issue passed triage: ${{ steps.triage.outputs.reason }}"
-          echo "Stage 2 will be triggered automatically by the ai-issue/valid label"
+
+  # Call Stage 2 when triage passes
+  analyze:
+    needs: triage
+    if: needs.triage.outputs.decision == 'ai-issue/valid'
+    uses: ./.github/workflows/ai-issue-2-analyze.yml
+    with:
+      issue_number: ${{ needs.triage.outputs.issue_number }}
+    secrets: inherit

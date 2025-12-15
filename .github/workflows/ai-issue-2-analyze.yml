@@ -1,8 +1,12 @@
 name: "AI Issue: Stage 2 - Analyze"
 
 on:
-  issues:
-    types: [labeled]
+  workflow_call:
+    inputs:
+      issue_number:
+        description: 'Issue number to process'
+        required: true
+        type: number
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -35,20 +39,9 @@ jobs:
           NEEDS_AUTH="false"
 
           case "${{ github.event_name }}" in
-            workflow_dispatch)
-              echo "✅ Manual trigger via workflow_dispatch"
+            workflow_dispatch|workflow_call)
+              echo "✅ Trigger via ${{ github.event_name }}"
               SHOULD_RUN="true"
-              ;;
-            issues)
-              # Auto-trigger from Stage 1: ai-issue/valid label added
-              LABEL="${{ github.event.label.name }}"
-              echo "Label added: $LABEL"
-              if [ "$LABEL" = "ai-issue/valid" ]; then
-                echo "✅ ai-issue/valid label added (auto-trigger from Stage 1)"
-                SHOULD_RUN="true"
-              else
-                SKIP_REASON="Label '$LABEL' is not 'ai-issue/valid' - Stage 2 auto-triggers only on ai-issue/valid label"
-              fi
               ;;
             issue_comment)
               # Manual trigger via @ai-issue analyze command (requires CODEOWNERS auth)
@@ -114,10 +107,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Get issue number based on event type
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "workflow_call" ]; then
             ISSUE_NUM=${{ inputs.issue_number }}
-          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
-            ISSUE_NUM=${{ github.event.issue.number }}
           else
             ISSUE_NUM=${{ github.event.issue.number }}
           fi

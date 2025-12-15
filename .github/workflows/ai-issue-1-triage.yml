@@ -99,7 +99,7 @@ jobs:
             "/tmp/issues.txt" > /tmp/triage_prompt.txt
 
           # Call API using shared script
-          RESPONSE=$(.github/scripts/ai-issue/call-claude-api.sh /tmp/triage_prompt.txt "claude-sonnet-4-5-20250514" 256)
+          RESPONSE=$(.github/scripts/ai-issue/call-claude-api.sh /tmp/triage_prompt.txt)
 
           echo "=== LLM Response ==="
           echo "$RESPONSE"

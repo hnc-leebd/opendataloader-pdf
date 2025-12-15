@@ -45,15 +45,3 @@ action:
 # - bug
 # - documentation
 # - enhancement
-
-# Priority Labels
-priority:
-  - name: priority/P0
-    color: "B60205"
-    description: "Critical - production blocking"
-  - name: priority/P1
-    color: "D93F0B"
-    description: "Important - not immediately blocking"
-  - name: priority/P2
-    color: "FBCA04"
-    description: "Normal or low priority"

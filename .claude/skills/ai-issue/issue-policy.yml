@@ -1,5 +1,5 @@
 # Issue Policy
-# Labels, priority definitions, and story point estimation
+# Type labels, priority definitions, and story point estimation
 
 # Type labels (choose ONE OR MORE)
 # Uses GitHub default labels
@@ -13,15 +13,15 @@ type_labels:
   - name: documentation
     description: Documentation
 
-# Priority labels (choose exactly ONE)
-priority_labels:
-  - name: priority/P0
+# Priority (choose exactly ONE)
+priority:
+  - value: P0
     description: Highest priority; production blocking, severe regression, data loss
 
-  - name: priority/P1
+  - value: P1
     description: Important but not immediately blocking
 
-  - name: priority/P2
+  - value: P2
     description: Normal or low priority
 
 # Story points (choose exactly ONE)

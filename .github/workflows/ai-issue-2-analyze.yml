@@ -233,7 +233,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LABELS: ${{ steps.analysis.outputs.labels }}
           ACTION: ${{ steps.analysis.outputs.action }}
-          PRIORITY: ${{ steps.analysis.outputs.priority }}
         run: |
           ISSUE_NUM=${{ steps.check.outputs.issue_number }}
 
@@ -247,9 +246,6 @@ jobs:
               *) LABEL_ARGS="$LABEL_ARGS --add-label \"$label\"" ;;
             esac
           done
-
-          # Add priority label (priority/P0, priority/P1, priority/P2)
-          LABEL_ARGS="$LABEL_ARGS --add-label \"priority/$PRIORITY\""
 
           # Add fix status label based on action
           if [ "$ACTION" = "fix/auto-eligible" ]; then

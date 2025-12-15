@@ -53,10 +53,15 @@ Body: $ISSUE_BODY
 
 ## Decision Required
 Based ONLY on the README and issue list above, determine:
-1. Is this SPAM or OUT OF SCOPE? (ads, gibberish, abuse, unrelated to project) → "invalid"
+1. Is this SPAM or COMPLETELY UNRELATED? → "invalid"
+   - Examples: ads, gibberish, abuse, security exploits, completely unrelated topics (e.g., cooking recipes)
+   - NOT invalid: maintenance tasks (copyright updates, license changes, dependency updates, CI/CD improvements, documentation fixes, typo corrections) - these ARE valid project issues
 2. Is this a DUPLICATE? (very similar to existing issue) → "duplicate"
-3. Is this UNCLEAR? (missing reproduction steps, environment, or details) → "needs-info"
+3. Is this UNCLEAR? (missing reproduction steps, environment, or details needed to act on it) → "needs-info"
 4. Otherwise → "valid"
+   - Bug reports, feature requests, enhancements, maintenance tasks, documentation updates are all valid
+
+IMPORTANT: When in doubt, prefer "valid" over "invalid". Only mark as "invalid" if the issue is clearly spam or completely unrelated to software development/maintenance.
 
 Respond with JSON only:
 {

@@ -13,6 +13,11 @@ on:
         description: 'Issue number to fix'
         required: true
         type: number
+      force:
+        description: 'Skip label check (force run without fix/auto-eligible label)'
+        required: false
+        type: boolean
+        default: false
   issue_comment:
     types: [created]
 
@@ -83,8 +88,8 @@ jobs:
             exit 0
           fi
 
-          # Skip label check for workflow_call (already validated by Stage 2)
-          if [ "${{ github.event_name }}" = "workflow_call" ]; then
+          # Skip label check for workflow_call (already validated by Stage 2) or force mode
+          if [ "${{ github.event_name }}" = "workflow_call" ] || [ "${{ inputs.force }}" = "true" ]; then
             echo "skip=false" >> $GITHUB_OUTPUT
             exit 0
           fi

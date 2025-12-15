@@ -125,11 +125,11 @@ jobs:
             exit 0
           fi
 
-          # Check if already analyzed
+          # Check if already analyzed (has fix/* label)
           LABELS=$(gh issue view $ISSUE_NUM --repo ${{ github.repository }} --json labels --jq '.labels[].name')
-          if echo "$LABELS" | grep -q "ai-issue/analyzed"; then
+          if echo "$LABELS" | grep -q "^fix/"; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Already analyzed" >> $GITHUB_OUTPUT
+            echo "reason=Already analyzed (has fix/* label)" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -320,9 +320,6 @@ jobs:
           else
             LABEL_ARGS="$LABEL_ARGS --add-label \"fix/manual-required\""
           fi
-
-          # Add ai-issue/analyzed label
-          LABEL_ARGS="$LABEL_ARGS --add-label \"ai-issue/analyzed\""
 
           eval gh issue edit $ISSUE_NUM $LABEL_ARGS
 

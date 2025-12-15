@@ -79,17 +79,10 @@ jobs:
           # Check labels
           LABELS=$(gh issue view $ISSUE_NUM --repo ${{ github.repository }} --json labels --jq '.labels[].name')
 
-          # Must have ai-issue/analyzed label (for workflow_dispatch; issue_comment already checks this in job condition)
-          if ! echo "$LABELS" | grep -q "ai-issue/analyzed"; then
+          # Must have fix/auto-eligible label
+          if ! echo "$LABELS" | grep -q "fix/auto-eligible"; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Issue not analyzed (Stage 2 not completed)" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Check if already fixed (has ai-issue/fixed label)
-          if echo "$LABELS" | grep -q "ai-issue/fixed"; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-            echo "reason=Issue already has ai-issue/fixed label" >> $GITHUB_OUTPUT
+            echo "reason=Issue does not have fix/auto-eligible label" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -321,8 +314,8 @@ jobs:
 
           gh issue comment $ISSUE_NUM --body "$COMMENT"
 
-          # Add ai-issue/fixed label
-          gh issue edit $ISSUE_NUM --add-label "ai-issue/fixed"
+          # Remove fix/auto-eligible label (PR is created)
+          gh issue edit $ISSUE_NUM --remove-label "fix/auto-eligible"
 
       - name: "Result: Failure"
         if: steps.check.outputs.skip != 'true' && steps.fix.outputs.success != 'true'

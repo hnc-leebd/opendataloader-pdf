@@ -21,12 +21,12 @@ A test framework for validating AI Issue workflow decisions.
 └── test/
     ├── run-tests.sh                 # Test runner
     ├── cases/
-    │   ├── stage1-quick/            # Stage 1 test cases
-    │   │   ├── invalid-spam.json
+    │   ├── stage1/                  # Stage 1 test cases
+    │   │   ├── invalid-*.json
     │   │   ├── duplicate-*.json
     │   │   ├── question-*.json
     │   │   └── valid-*.json
-    │   └── stage2-deep/             # Stage 2 test cases
+    │   └── stage2/                  # Stage 2 test cases
     │       ├── auto-fix-*.json
     │       └── manual-*.json
     └── fixtures/
@@ -63,12 +63,12 @@ A test framework for validating AI Issue workflow decisions.
   "input": {
     "title": "Typo in error message",
     "body": "The error message says 'Invlaid input' instead of 'Invalid input'",
-    "labels": ["ai-issue/valid", "ai-issue/triaged"],
+    "labels": [],
     "comments": []
   },
   "expected": {
     "action": "fix/auto-eligible",
-    "labels_include": ["bug", "fix/auto-eligible"],
+    "labels_include": ["bug"],
     "labels_exclude": ["fix/manual-required"],
     "priority_in": ["P2"],
     "analysis_contains": ["typo", "error message"]
@@ -93,12 +93,12 @@ A test framework for validating AI Issue workflow decisions.
 
 ### Stage 1: Triage
 
-| Category | Expected Result | Example Cases |
-|----------|----------------|---------------|
-| **Invalid** | `decision: "invalid"` | Spam, ads, gibberish, unrelated to project |
-| **Duplicate** | `decision: "duplicate"` | Same problem as existing issue, similar title/content |
-| **Question** | `decision: "question"` | Missing repro steps, no environment info, unclear description |
-| **Valid** | `decision: "valid"` | Clear bug report, feature request, docs improvement |
+| Category | Expected Result | GitHub Label | Example Cases |
+|----------|----------------|--------------|---------------|
+| **Invalid** | `decision: "invalid"` | `wontfix` | Spam, ads, gibberish, unrelated to project |
+| **Duplicate** | `decision: "duplicate"` | `duplicate` | Same problem as existing issue, similar title/content |
+| **Needs Info** | `decision: "needs-info"` | `question` | Missing repro steps, no environment info, unclear description |
+| **Valid** | `decision: "valid"` | (none) | Clear bug report, feature request, docs improvement |
 
 ### Stage 2: Analyze
 
@@ -195,11 +195,11 @@ AI Issue Test Runner
 
 Stage 1: Triage
 ----------------------------------------
-✓ invalid-spam.json (decision: ai-issue/invalid) [3s]
-✓ duplicate-table-extraction.json (decision: ai-issue/duplicate) [2s]
+✓ invalid-spam.json (decision: invalid) [3s]
+✓ duplicate-table-extraction.json (decision: duplicate) [2s]
 ✗ question-missing-steps.json [4s]
-    → Expected decision 'ai-issue/needs-info', got 'ai-issue/valid'
-✓ valid-bug-report.json (decision: ai-issue/valid) [3s]
+    → Expected decision 'needs-info', got 'valid'
+✓ valid-bug-report.json (decision: valid) [3s]
 
 Stage 2: Analyze
 ----------------------------------------

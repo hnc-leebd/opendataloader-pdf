@@ -6,7 +6,7 @@
     "body": "I'm trying to cook pasta but it keeps coming out too soft. Can someone help me with the proper cooking time and techniques?\n\nI usually boil it for 15 minutes but it's always mushy."
   },
   "expected": {
-    "decision": "ai-issue/invalid",
+    "decision": "invalid",
     "reason_contains": ["unrelated", "scope"]
   }
 }

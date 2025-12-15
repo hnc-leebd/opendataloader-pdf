@@ -1,15 +1,14 @@
 {
-  "name": "Respond only - user asking for existing feature",
-  "description": "User requests feature that already exists - should respond with guidance",
+  "name": "Manual required - user asking for existing feature",
+  "description": "User requests feature that already exists - needs guidance (not auto-fixable)",
   "input": {
     "title": "Add option to skip empty pages",
     "body": "## Feature Request\n\nWhen processing PDFs, I want to skip pages that have no content.\n\nCurrently I have to filter them out manually after processing.\n\n## Use Case\nProcessing scanned documents that have blank separator pages.",
-    "labels": ["ai-issue/valid", "ai-issue/triaged"],
+    "labels": [],
     "comments": []
   },
   "expected": {
-    "action": "respond/comment-only",
-    "labels_include": ["documentation"],
-    "priority_in": ["P2"]
+    "action": "fix/manual-required",
+    "labels_include": ["documentation"]
   }
 }

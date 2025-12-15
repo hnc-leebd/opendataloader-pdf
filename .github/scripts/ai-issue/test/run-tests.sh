@@ -112,14 +112,6 @@ run_stage1_test() {
   local actual_decision=$(echo "$parsed" | grep "^decision=" | cut -d= -f2)
   local actual_duplicate=$(echo "$parsed" | grep "^duplicate_of=" | cut -d= -f2)
 
-  # Normalize expected decision to new label format
-  case "$expected_decision" in
-    "invalid"|"triage/invalid") expected_decision="ai-issue/invalid" ;;
-    "duplicate"|"triage/duplicate") expected_decision="ai-issue/duplicate" ;;
-    "question"|"needs-info"|"triage/needs-info") expected_decision="ai-issue/needs-info" ;;
-    "valid"|"triage/valid") expected_decision="ai-issue/valid" ;;
-  esac
-
   # Check result
   local test_passed=true
   local errors=""

@@ -26,7 +26,7 @@ jobs:
 
     if: |
       github.event_name == 'workflow_dispatch' ||
-      !contains(github.event.issue.labels.*.name, 'ai-issue/triaged')
+      !contains(github.event.issue.labels.*.name, 'fix/')
 
     steps:
       - name: Check daily limit
@@ -119,7 +119,7 @@ jobs:
           echo "$PARSED" >> $GITHUB_OUTPUT
 
       - name: "Result: Close as invalid"
-        if: steps.triage.outputs.decision == 'ai-issue/invalid'
+        if: steps.triage.outputs.decision == 'invalid'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REASON: ${{ steps.triage.outputs.reason }}
@@ -142,10 +142,10 @@ jobs:
             --reason "not planned" \
             --comment "$COMMENT"
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "ai-issue/triaged,ai-issue/invalid"
+            --add-label "wontfix"
 
       - name: "Result: Close as duplicate"
-        if: steps.triage.outputs.decision == 'ai-issue/duplicate'
+        if: steps.triage.outputs.decision == 'duplicate'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -178,10 +178,10 @@ jobs:
             --reason "not planned" \
             --comment "$COMMENT"
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "ai-issue/triaged,ai-issue/duplicate"
+            --add-label "duplicate"
 
       - name: "Result: Request more info"
-        if: steps.triage.outputs.decision == 'ai-issue/needs-info'
+        if: steps.triage.outputs.decision == 'needs-info'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           QUESTIONS: ${{ steps.triage.outputs.questions }}
@@ -206,10 +206,10 @@ jobs:
           gh issue comment ${{ github.event.issue.number || inputs.issue_number }} \
             --body "$COMMENT"
           gh issue edit ${{ github.event.issue.number || inputs.issue_number }} \
-            --add-label "ai-issue/triaged,ai-issue/needs-info"
+            --add-label "question"
 
       - name: "Result: Pass to Stage 2"
-        if: steps.triage.outputs.decision == 'ai-issue/valid'
+        if: steps.triage.outputs.decision == 'valid'
         id: valid
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -217,15 +217,12 @@ jobs:
           ISSUE_NUM=${{ github.event.issue.number || inputs.issue_number }}
           echo "issue_number=$ISSUE_NUM" >> $GITHUB_OUTPUT
 
-          # Add labels
-          gh issue edit $ISSUE_NUM --add-label "ai-issue/triaged,ai-issue/valid"
-
           echo "✓ Issue passed triage: ${{ steps.triage.outputs.reason }}"
 
   # Call Stage 2 when triage passes
   analyze:
     needs: triage
-    if: needs.triage.outputs.decision == 'ai-issue/valid'
+    if: needs.triage.outputs.decision == 'valid'
     uses: ./.github/workflows/ai-issue-2-analyze.yml
     with:
       issue_number: ${{ fromJson(needs.triage.outputs.issue_number) }}

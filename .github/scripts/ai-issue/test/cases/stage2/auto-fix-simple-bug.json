@@ -4,7 +4,7 @@
   "input": {
     "title": "TypeError when PDF has no pages",
     "body": "## Description\nWhen processing a PDF file that has no pages (corrupted or empty), the library throws a TypeError.\n\n## Stack Trace\n```\nTypeError: 'NoneType' object is not iterable\n  at process_pdf in pdf_processor.py\n```\n\n## Expected\nShould return an empty result or throw a descriptive exception.\n\n## Environment\n- Python 3.11\n- opendataloader-pdf 1.2.0",
-    "labels": ["ai-issue/valid", "ai-issue/triaged"],
+    "labels": [],
     "comments": []
   },
   "expected": {

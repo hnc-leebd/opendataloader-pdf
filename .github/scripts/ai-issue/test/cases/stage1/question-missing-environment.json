@@ -6,7 +6,7 @@
     "body": "I'm getting this error when trying to parse a PDF:\n\n```\nError: Unable to process document\n```\n\nThe PDF file is about 5MB and has multiple pages with images."
   },
   "expected": {
-    "decision": "ai-issue/needs-info",
+    "decision": "needs-info",
     "questions_min_count": 1
   }
 }

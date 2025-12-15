@@ -1,47 +1,19 @@
 # AI Issue Label Definitions
 # Used by setup-labels.sh to create/update GitHub labels
 
-# Stage Status Labels
-stage-status:
-  - name: ai-issue/triaged
-    color: "FBCA04"
-    description: "Stage 1 (Triage) completed"
-  - name: ai-issue/analyzed
-    color: "D93F0B"
-    description: "Stage 2 (Analyze) completed"
-  - name: ai-issue/fixed
-    color: "0E8A16"
-    description: "Stage 3 (Fix) completed (PR created)"
-
-# Triage Result Labels
-triage-result:
-  - name: ai-issue/valid
-    color: "0E8A16"
-    description: "Valid issue, proceed to Stage 2"
-  - name: ai-issue/invalid
-    color: "666666"
-    description: "Out of scope or spam"
-  - name: ai-issue/duplicate
-    color: "CFD3D7"
-    description: "Duplicate of existing issue"
-  - name: ai-issue/needs-info
-    color: "D876E3"
-    description: "Needs more information"
-
-# Action Labels
+# Action Labels (ai-issue skill managed)
 action:
   - name: fix/auto-eligible
     color: "0E8A16"
-    description: "Eligible for auto-fix"
+    description: "AI auto-fix eligible"
   - name: fix/manual-required
     color: "FBCA04"
     description: "Requires human implementation"
-  - name: respond/comment-only
-    color: "C5DEF5"
-    description: "No code change needed, respond with comment"
 
-# Type Labels (GitHub defaults - not managed by setup-labels.sh)
-# These are standard GitHub labels that already exist:
-# - bug
-# - documentation
-# - enhancement
+# GitHub Default Labels (not managed by setup-labels.sh)
+# Use these standard labels as needed:
+# - bug, enhancement, documentation (type)
+# - duplicate (triage result)
+# - question (needs more info)
+# - wontfix (out of scope or rejected)
+# - good first issue, help wanted (contribution)

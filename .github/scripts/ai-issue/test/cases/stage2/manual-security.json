@@ -4,7 +4,7 @@
   "input": {
     "title": "PDF with malicious JavaScript executes code via eval()",
     "body": "## Security Issue\n\nI discovered that PDFs containing embedded JavaScript can execute arbitrary code when processed by the library.\n\n## Steps to Reproduce\n1. Create a PDF with embedded JavaScript\n2. Process it with process_with_scripts() function\n3. The JavaScript is evaluated using Python's eval()\n\n## Impact\nThis could allow arbitrary code execution through malicious PDF files. The eval() call in pdf_processor.py is dangerous.\n\n## Suggested Fix\nRemove or sandbox JavaScript evaluation during PDF processing.",
-    "labels": ["ai-issue/valid", "ai-issue/triaged"],
+    "labels": [],
     "comments": []
   },
   "expected": {

@@ -240,12 +240,10 @@ jobs:
           # Build label arguments
           LABEL_ARGS=""
           for label in $(echo "$LABELS" | jq -r '.[]'); do
-            # Convert old labels to new format (type/*)
+            # Use GitHub default labels directly (bug, documentation, enhancement)
+            # Skip dependencies as it's not a standard label
             case "$label" in
-              bug) LABEL_ARGS="$LABEL_ARGS --add-label \"type/bug\"" ;;
-              enhancement) LABEL_ARGS="$LABEL_ARGS --add-label \"type/enhancement\"" ;;
-              documentation) LABEL_ARGS="$LABEL_ARGS --add-label \"type/docs\"" ;;
-              dependencies) LABEL_ARGS="$LABEL_ARGS --add-label \"type/dependencies\"" ;;
+              dependencies) ;; # Skip - not a standard GitHub label
               *) LABEL_ARGS="$LABEL_ARGS --add-label \"$label\"" ;;
             esac
           done

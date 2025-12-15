@@ -9,7 +9,7 @@
   },
   "expected": {
     "action": "fix/manual-required",
-    "labels_include": ["type/bug"],
+    "labels_include": ["bug"],
     "labels_exclude": ["fix/auto-eligible"],
     "priority_in": ["P0", "P1"]
   }

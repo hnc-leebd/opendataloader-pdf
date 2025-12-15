@@ -68,7 +68,7 @@ A test framework for validating AI Issue workflow decisions.
   },
   "expected": {
     "action": "fix/auto-eligible",
-    "labels_include": ["type/bug", "fix/auto-eligible"],
+    "labels_include": ["bug", "fix/auto-eligible"],
     "labels_exclude": ["fix/manual-required"],
     "priority_in": ["P2"],
     "analysis_contains": ["typo", "error message"]
@@ -84,7 +84,7 @@ A test framework for validating AI Issue workflow decisions.
 | `action` | Exact match | `"action": "fix/auto-eligible"` |
 | `duplicate_of` | null or specific value | `"duplicate_of": null` |
 | `reason_contains` | Keywords in reason string | `["spam", "gibberish"]` |
-| `labels_include` | Labels present in output | `["type/bug"]` |
+| `labels_include` | Labels present in output | `["bug"]` |
 | `labels_exclude` | Labels absent from output | `["fix/manual-required"]` |
 | `priority_in` | Priority within range | `["P0", "P1"]` |
 | `analysis_contains` | Keywords in analysis | `["affected_files"]` |

@@ -9,7 +9,7 @@
   },
   "expected": {
     "action": "respond/comment-only",
-    "labels_include": ["type/docs"],
+    "labels_include": ["documentation"],
     "priority_in": ["P2"]
   }
 }

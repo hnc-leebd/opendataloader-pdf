@@ -2,18 +2,16 @@
 # Labels, priority definitions, and story point estimation
 
 # Type labels (choose ONE OR MORE)
+# Uses GitHub default labels
 type_labels:
-  - name: type/bug
+  - name: bug
     description: Bug report
 
-  - name: type/enhancement
+  - name: enhancement
     description: Feature request or improvement
 
-  - name: type/docs
+  - name: documentation
     description: Documentation
-
-  - name: type/dependencies
-    description: Dependency update
 
 # Priority labels (choose exactly ONE)
 priority_labels:

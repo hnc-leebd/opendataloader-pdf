@@ -40,20 +40,11 @@ action:
     color: "C5DEF5"
     description: "No code change needed, respond with comment"
 
-# Type Labels
-type:
-  - name: type/bug
-    color: "D73A4A"
-    description: "Bug report"
-  - name: type/enhancement
-    color: "A2EEEF"
-    description: "Feature request or improvement"
-  - name: type/docs
-    color: "0075CA"
-    description: "Documentation"
-  - name: type/dependencies
-    color: "0366D6"
-    description: "Dependency update"
+# Type Labels (GitHub defaults - not managed by setup-labels.sh)
+# These are standard GitHub labels that already exist:
+# - bug
+# - documentation
+# - enhancement
 
 # Priority Labels
 priority:

@@ -92,7 +92,7 @@ ${MEMBERS:-Available: benedict (available)}
 Respond with JSON only (no markdown code blocks):
 {
   "action": "fix/auto-eligible" | "fix/manual-required" | "respond/comment-only",
-  "labels": ["type/bug", "type/enhancement", ...],
+  "labels": ["bug", "enhancement", "documentation", ...],
   "priority": "P0" | "P1" | "P2",
   "estimated": 1 | 2 | 3 | 5 | 8,
   "assignee": "github_id",

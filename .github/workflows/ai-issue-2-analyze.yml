@@ -1,6 +1,8 @@
 name: "AI Issue: Stage 2 - Analyze"
 
 on:
+  issues:
+    types: [labeled]
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -30,13 +32,26 @@ jobs:
 
           SHOULD_RUN="false"
           SKIP_REASON=""
+          NEEDS_AUTH="false"
 
           case "${{ github.event_name }}" in
             workflow_dispatch)
               echo "✅ Manual trigger via workflow_dispatch"
               SHOULD_RUN="true"
               ;;
+            issues)
+              # Auto-trigger from Stage 1: ai-issue/valid label added
+              LABEL="${{ github.event.label.name }}"
+              echo "Label added: $LABEL"
+              if [ "$LABEL" = "ai-issue/valid" ]; then
+                echo "✅ ai-issue/valid label added (auto-trigger from Stage 1)"
+                SHOULD_RUN="true"
+              else
+                SKIP_REASON="Label '$LABEL' is not 'ai-issue/valid' - Stage 2 auto-triggers only on ai-issue/valid label"
+              fi
+              ;;
             issue_comment)
+              # Manual trigger via @ai-issue analyze command (requires CODEOWNERS auth)
               COMMENT_BODY="${{ github.event.comment.body }}"
               COMMENTER_TYPE="${{ github.event.comment.user.type }}"
               echo "Comment body: $COMMENT_BODY"
@@ -46,6 +61,7 @@ jobs:
                 if [ "$COMMENTER_TYPE" != "Bot" ]; then
                   echo "✅ @ai-issue analyze command detected from non-bot user"
                   SHOULD_RUN="true"
+                  NEEDS_AUTH="true"
                 else
                   SKIP_REASON="@ai-issue analyze command from Bot is ignored"
                 fi
@@ -60,16 +76,17 @@ jobs:
 
           echo "should_run=$SHOULD_RUN" >> $GITHUB_OUTPUT
           echo "skip_reason=$SKIP_REASON" >> $GITHUB_OUTPUT
+          echo "needs_auth=$NEEDS_AUTH" >> $GITHUB_OUTPUT
 
           if [ "$SHOULD_RUN" = "false" ]; then
             echo "⚠️ Skipping: $SKIP_REASON"
           fi
 
       - uses: actions/checkout@v4
-        if: steps.trigger.outputs.should_run == 'true' && github.event_name == 'issue_comment'
+        if: steps.trigger.outputs.needs_auth == 'true'
 
       - name: Check CODEOWNERS permission
-        if: steps.trigger.outputs.should_run == 'true' && github.event_name == 'issue_comment'
+        if: steps.trigger.outputs.needs_auth == 'true'
         id: auth
         run: |
           COMMENTER="${{ github.event.comment.user.login }}"
@@ -89,7 +106,9 @@ jobs:
           fi
 
       - name: Check preconditions
-        if: steps.trigger.outputs.should_run == 'true' && (github.event_name == 'workflow_dispatch' || steps.auth.outputs.authorized == 'true')
+        if: |
+          steps.trigger.outputs.should_run == 'true' &&
+          (steps.trigger.outputs.needs_auth != 'true' || steps.auth.outputs.authorized == 'true')
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -130,12 +149,12 @@ jobs:
       - name: Skip notification
         if: |
           steps.trigger.outputs.should_run != 'true' ||
-          (github.event_name == 'issue_comment' && steps.auth.outputs.authorized != 'true') ||
+          (steps.trigger.outputs.needs_auth == 'true' && steps.auth.outputs.authorized != 'true') ||
           steps.check.outputs.skip == 'true'
         run: |
           if [ "${{ steps.trigger.outputs.should_run }}" != "true" ]; then
             echo "⚠️ Trigger condition not met: ${{ steps.trigger.outputs.skip_reason }}"
-          elif [ "${{ github.event_name }}" = "issue_comment" ] && [ "${{ steps.auth.outputs.authorized }}" != "true" ]; then
+          elif [ "${{ steps.trigger.outputs.needs_auth }}" = "true" ] && [ "${{ steps.auth.outputs.authorized }}" != "true" ]; then
             echo "⚠️ Authorization failed: ${{ github.event.comment.user.login }} is not a CODEOWNER"
           else
             echo "⚠️ Precondition not met: ${{ steps.check.outputs.reason }}"

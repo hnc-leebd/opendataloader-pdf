@@ -108,7 +108,7 @@ public class DocumentProcessor {
         for (int pageNumber = 0; pageNumber < numberOfPages; pageNumber++) {
             List<IChunk> rawContents = StaticContainers.getDocument().getArtifacts(pageNumber);
             BoundingBox pageBoundingBox = getPageBoundingBox(pageNumber);
-            PageTriage triage = TriageProcessor.triagePage(pageNumber, rawContents, pageBoundingBox, config);
+            PageTriage triage = TriageProcessor.triagePage(pageNumber, rawContents, pageBoundingBox);
             triageResults.add(triage);
 
             if (TriageProcessor.PATH_FAST.equals(triage.getPath())) {

@@ -49,7 +49,7 @@ class PipelineMetrics:
     total_pages: int = 0
     fast_pages: int = 0
     ai_pages: int = 0
-    ai_page_range: tuple[int, int] = (0, 0)
+    ai_page_range: list[int] = field(default_factory=list)
 
     _pipeline_start: float = field(default=0.0, repr=False)
     _pipeline_end: float = field(default=0.0, repr=False)
@@ -95,7 +95,7 @@ class PipelineMetrics:
             f"Pipeline Metrics ({self.total_pages} pages)",
             "=" * 70,
             f"Page routing: {self.fast_pages} fast, {self.ai_pages} AI ({self.ai_ratio:.0%})",
-            f"AI page range: {self.ai_page_range[0]}-{self.ai_page_range[1]}",
+            f"AI pages: {self.ai_page_range}" if self.ai_page_range else "AI pages: none",
             "=" * 70,
             f"{'Phase':<20} {'Duration':>10} {'Items':>8} {'Rate':>12}",
             "-" * 70,
@@ -122,7 +122,7 @@ class PipelineMetrics:
             "fast_pages": self.fast_pages,
             "ai_pages": self.ai_pages,
             "ai_ratio": self.ai_ratio,
-            "ai_page_range": list(self.ai_page_range),
+            "ai_page_range": self.ai_page_range,
             "phases": {
                 "jar": {
                     "duration": self.jar_phase.duration,

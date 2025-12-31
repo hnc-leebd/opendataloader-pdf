@@ -92,7 +92,7 @@ class HybridPipeline:
             ai_results: dict[int, dict[str, Any]] = {}
             if ai_pages:
                 page_numbers = sorted([p["page"] for p in ai_pages])
-                self._metrics.ai_page_range = (min(page_numbers), max(page_numbers))
+                self._metrics.ai_page_range = page_numbers
 
                 with MetricsContext(self._metrics.ai_phase, len(ai_pages)):
                     ai_results = self._process_ai_pages(ai_pages, triage, pdf_path)

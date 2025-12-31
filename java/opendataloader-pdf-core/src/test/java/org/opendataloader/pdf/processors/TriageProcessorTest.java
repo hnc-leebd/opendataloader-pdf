@@ -9,7 +9,6 @@ package org.opendataloader.pdf.processors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.opendataloader.pdf.api.Config;
 import org.opendataloader.pdf.processors.TriageProcessor.PageTriage;
 import org.opendataloader.pdf.processors.TriageProcessor.TriageSignals;
 import org.verapdf.wcag.algorithms.entities.content.IChunk;
@@ -25,29 +24,26 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class TriageProcessorTest {
 
-    private Config config;
     private BoundingBox pageBoundingBox;
 
     @BeforeEach
     public void setUp() {
         StaticContainers.setIsIgnoreCharactersWithoutUnicode(false);
         StaticContainers.setIsDataLoader(true);
-        config = new Config();
         // Page is 100x100 units (area = 10000)
         pageBoundingBox = new BoundingBox(0, 0.0, 0.0, 100.0, 100.0);
     }
 
     @Test
-    public void testTriagePage_EmptyPage_ReturnsAiPath_DueToLowTextCoverage() {
-        // Empty page has 0% text coverage, which is below the 10% threshold
-        // This correctly triggers AI path for OCR
+    public void testTriagePage_EmptyPage_ReturnsFastPath() {
+        // Empty page has no images and no text - fast path (nothing to OCR)
         List<IChunk> contents = new ArrayList<>();
 
-        PageTriage result = TriageProcessor.triagePage(0, contents, pageBoundingBox, config);
+        PageTriage result = TriageProcessor.triagePage(0, contents, pageBoundingBox);
 
         assertEquals(0, result.getPageNumber());
-        assertEquals(TriageProcessor.PATH_AI, result.getPath());
-        assertTrue(result.isNeedsOcr());
+        assertEquals(TriageProcessor.PATH_FAST, result.getPath());
+        assertFalse(result.isNeedsOcr());
         assertFalse(result.isNeedsTableAi());
     }
 
@@ -57,70 +53,36 @@ public class TriageProcessorTest {
         // Add text covering 20% of page (area = 2000)
         contents.add(createTextChunk(0.0, 0.0, 100.0, 20.0, "Sample text content"));
 
-        PageTriage result = TriageProcessor.triagePage(0, contents, pageBoundingBox, config);
+        PageTriage result = TriageProcessor.triagePage(0, contents, pageBoundingBox);
 
         assertEquals(TriageProcessor.PATH_FAST, result.getPath());
         assertFalse(result.isNeedsOcr());
     }
 
     @Test
-    public void testTriagePage_HighImageArea_ReturnsAiPath() {
+    public void testTriagePage_ImageOnlyPage_ReturnsAiPath() {
+        // Pure image page with no text needs OCR
         List<IChunk> contents = new ArrayList<>();
-        // Add large image covering 10% of page (area = 1000, threshold is 5%)
-        contents.add(createImageChunk(0.0, 0.0, 100.0, 10.0));
+        // Add image covering some of the page
+        contents.add(createImageChunk(0.0, 0.0, 100.0, 50.0));
 
-        PageTriage result = TriageProcessor.triagePage(0, contents, pageBoundingBox, config);
+        PageTriage result = TriageProcessor.triagePage(0, contents, pageBoundingBox);
 
         assertEquals(TriageProcessor.PATH_AI, result.getPath());
         assertTrue(result.isNeedsOcr());
     }
 
     @Test
-    public void testTriagePage_LowTextCoverage_ReturnsAiPath() {
+    public void testTriagePage_ImageWithText_ReturnsFastPath() {
+        // Page with both image and text - no OCR needed
         List<IChunk> contents = new ArrayList<>();
-        // Add text covering only 5% of page (area = 500, threshold is 10%)
-        contents.add(createTextChunk(0.0, 0.0, 50.0, 10.0, "Small text"));
+        contents.add(createImageChunk(0.0, 0.0, 100.0, 50.0));
+        contents.add(createTextChunk(0.0, 50.0, 100.0, 70.0, "Some text"));
 
-        PageTriage result = TriageProcessor.triagePage(0, contents, pageBoundingBox, config);
-
-        assertEquals(TriageProcessor.PATH_AI, result.getPath());
-        assertTrue(result.isNeedsOcr());
-    }
-
-    @Test
-    public void testTriagePage_CustomThresholds() {
-        Config customConfig = new Config();
-        customConfig.setImageAreaThreshold(0.20); // 20%
-        customConfig.setTextCoverageThreshold(0.05); // 5%
-
-        List<IChunk> contents = new ArrayList<>();
-        // Image at 10% (under new threshold)
-        contents.add(createImageChunk(0.0, 0.0, 100.0, 10.0));
-        // Text at 8% (above new threshold)
-        contents.add(createTextChunk(0.0, 10.0, 80.0, 20.0, "Sample text"));
-
-        PageTriage result = TriageProcessor.triagePage(0, contents, pageBoundingBox, customConfig);
+        PageTriage result = TriageProcessor.triagePage(0, contents, pageBoundingBox);
 
         assertEquals(TriageProcessor.PATH_FAST, result.getPath());
         assertFalse(result.isNeedsOcr());
-    }
-
-    @Test
-    public void testTriageWithHighMissingToUnicodeThreshold() {
-        // Test that when threshold is set very low, missing ToUnicode fonts trigger AI path
-        Config customConfig = new Config();
-        customConfig.setMissingToUnicodeThreshold(0.0); // 0% - any missing triggers AI
-        customConfig.setTextCoverageThreshold(0.0); // Disable text coverage check
-
-        List<IChunk> contents = new ArrayList<>();
-        // Add sufficient text coverage
-        contents.add(createTextChunk(0.0, 0.0, 100.0, 50.0, "Sample text"));
-
-        PageTriage result = TriageProcessor.triagePage(0, contents, pageBoundingBox, customConfig);
-
-        // With 0% threshold for missing ToUnicode, even 0% missing should be fine
-        // This tests the threshold comparison logic
-        assertEquals(TriageProcessor.PATH_FAST, result.getPath());
     }
 
     @Test
@@ -170,7 +132,7 @@ public class TriageProcessorTest {
 
     @Test
     public void testPageTriageGetters() {
-        TriageSignals signals = new TriageSignals(0.1, 0.2, 0.3, true, true, true);
+        TriageSignals signals = new TriageSignals(0.1, 0.2, 0.3, true, true, true, true, false);
         PageTriage triage = new PageTriage(5, TriageProcessor.PATH_AI, true, true, signals);
 
         assertEquals(5, triage.getPageNumber());
@@ -182,7 +144,7 @@ public class TriageProcessorTest {
 
     @Test
     public void testTriageSignalsGetters() {
-        TriageSignals signals = new TriageSignals(0.15, 0.25, 0.35, true, true, true);
+        TriageSignals signals = new TriageSignals(0.15, 0.25, 0.35, true, true, true, true, true);
 
         assertEquals(0.15, signals.getImageAreaRatio(), 0.001);
         assertEquals(0.25, signals.getTextCoverage(), 0.001);
@@ -190,6 +152,8 @@ public class TriageProcessorTest {
         assertTrue(signals.isHasType3Fonts());
         assertTrue(signals.isHasGridAlignedText());
         assertTrue(signals.isHasSuspiciousTextGaps());
+        assertTrue(signals.isHasImage());
+        assertTrue(signals.isHasText());
     }
 
     private TextChunk createTextChunk(double leftX, double bottomY, double rightX, double topY, String text) {

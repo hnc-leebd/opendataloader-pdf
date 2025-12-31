@@ -7,12 +7,11 @@
  */
 package org.opendataloader.pdf.processors;
 
-import org.opendataloader.pdf.api.Config;
-import org.verapdf.wcag.algorithms.entities.IObject;
 import org.verapdf.wcag.algorithms.entities.content.IChunk;
 import org.verapdf.wcag.algorithms.entities.content.ImageChunk;
 import org.verapdf.wcag.algorithms.entities.content.TextChunk;
 import org.verapdf.wcag.algorithms.entities.geometry.BoundingBox;
+import org.verapdf.wcag.algorithms.semanticalgorithms.utils.NodeUtils;
 
 import java.util.List;
 
@@ -26,6 +25,14 @@ public class TriageProcessor {
     public static final String PATH_FAST = "fast";
     /** Processing path: use AI-based processing. */
     public static final String PATH_AI = "ai";
+
+    // Constants matching AbstractTableProcessor for table detection
+    private static final double Y_DIFFERENCE_EPSILON = 0.1;
+    private static final double X_DIFFERENCE_EPSILON = 3;
+
+    private TriageProcessor() {
+        // Utility class
+    }
 
     /**
      * Result of page triage analysis.
@@ -76,15 +83,20 @@ public class TriageProcessor {
         private final boolean hasType3Fonts;
         private final boolean hasGridAlignedText;
         private final boolean hasSuspiciousTextGaps;
+        private final boolean hasImage;
+        private final boolean hasText;
 
         public TriageSignals(double imageAreaRatio, double textCoverage, double missingToUnicodeRatio,
-                             boolean hasType3Fonts, boolean hasGridAlignedText, boolean hasSuspiciousTextGaps) {
+                             boolean hasType3Fonts, boolean hasGridAlignedText, boolean hasSuspiciousTextGaps,
+                             boolean hasImage, boolean hasText) {
             this.imageAreaRatio = imageAreaRatio;
             this.textCoverage = textCoverage;
             this.missingToUnicodeRatio = missingToUnicodeRatio;
             this.hasType3Fonts = hasType3Fonts;
             this.hasGridAlignedText = hasGridAlignedText;
             this.hasSuspiciousTextGaps = hasSuspiciousTextGaps;
+            this.hasImage = hasImage;
+            this.hasText = hasText;
         }
 
         public double getImageAreaRatio() {
@@ -110,6 +122,14 @@ public class TriageProcessor {
         public boolean isHasSuspiciousTextGaps() {
             return hasSuspiciousTextGaps;
         }
+
+        public boolean isHasImage() {
+            return hasImage;
+        }
+
+        public boolean isHasText() {
+            return hasText;
+        }
     }
 
     /**
@@ -118,14 +138,13 @@ public class TriageProcessor {
      * @param pageNumber the page number (0-indexed)
      * @param contents the raw page contents
      * @param pageBoundingBox the page bounding box
-     * @param config the configuration settings
      * @return the triage result indicating processing path and requirements
      */
     public static PageTriage triagePage(int pageNumber, List<IChunk> contents,
-                                        BoundingBox pageBoundingBox, Config config) {
+                                        BoundingBox pageBoundingBox) {
         TriageSignals signals = analyzePageSignals(contents, pageBoundingBox);
 
-        boolean needsOcr = checkNeedsOcr(signals, config);
+        boolean needsOcr = checkNeedsOcr(signals);
         boolean needsTableAi = checkNeedsTableAi(signals);
 
         String path = (needsOcr || needsTableAi) ? PATH_AI : PATH_FAST;
@@ -143,83 +162,126 @@ public class TriageProcessor {
     static TriageSignals analyzePageSignals(List<IChunk> contents, BoundingBox pageBoundingBox) {
         double pageArea = calculateBoundingBoxArea(pageBoundingBox);
         if (pageArea <= 0) {
-            return new TriageSignals(0, 0, 0, false, false, false);
+            return new TriageSignals(0, 0, 0, false, false, false, false, false);
         }
 
-        double totalImageArea = 0;
-        double totalTextArea = 0;
-        int totalFonts = 0;
-        int fontsWithoutToUnicode = 0;
-        boolean hasType3Fonts = false;
-        boolean hasGridAlignedText = false;
-        boolean hasSuspiciousTextGaps = false;
-
-        TextChunk previousTextChunk = null;
+        SignalAccumulator accumulator = new SignalAccumulator();
 
         for (IChunk chunk : contents) {
             if (chunk instanceof ImageChunk) {
-                ImageChunk image = (ImageChunk) chunk;
-                totalImageArea += calculateBoundingBoxArea(image.getBoundingBox());
+                accumulator.addImageArea(calculateBoundingBoxArea(chunk.getBoundingBox()));
             } else if (chunk instanceof TextChunk) {
-                TextChunk textChunk = (TextChunk) chunk;
-                totalTextArea += calculateBoundingBoxArea(textChunk.getBoundingBox());
-
-                // Check font properties
-                if (textChunk.getFontName() != null) {
-                    totalFonts++;
-                    // Check for Type3 font (font name often contains "Type3")
-                    if (textChunk.getFontName().contains("Type3")) {
-                        hasType3Fonts = true;
-                    }
-                    // ToUnicode mapping check - fonts without proper mapping often have
-                    // replacement characters or unmapped glyphs
-                    if (hasUnmappedCharacters(textChunk.getValue())) {
-                        fontsWithoutToUnicode++;
-                    }
-                }
-
-                // Check for suspicious text gaps (table detection signal)
-                if (previousTextChunk != null) {
-                    if (detectSuspiciousTextGap(previousTextChunk, textChunk)) {
-                        hasSuspiciousTextGaps = true;
-                    }
-                    if (detectGridAlignment(previousTextChunk, textChunk)) {
-                        hasGridAlignedText = true;
-                    }
-                }
-                previousTextChunk = textChunk;
+                accumulator.processTextChunk((TextChunk) chunk);
             }
         }
 
-        double imageAreaRatio = totalImageArea / pageArea;
-        double textCoverage = totalTextArea / pageArea;
-        double missingToUnicodeRatio = totalFonts > 0 ? (double) fontsWithoutToUnicode / totalFonts : 0;
-
-        return new TriageSignals(imageAreaRatio, textCoverage, missingToUnicodeRatio,
-                hasType3Fonts, hasGridAlignedText, hasSuspiciousTextGaps);
+        return accumulator.buildSignals(pageArea);
     }
 
     /**
-     * Checks if page needs OCR processing based on signals and thresholds.
+     * Helper class to accumulate signals during page analysis.
      */
-    private static boolean checkNeedsOcr(TriageSignals signals, Config config) {
-        // High image area suggests scanned content
-        if (signals.getImageAreaRatio() > config.getImageAreaThreshold()) {
-            return true;
+    private static class SignalAccumulator {
+        private double totalImageArea = 0;
+        private double totalTextArea = 0;
+        private int totalFonts = 0;
+        private int fontsWithoutToUnicode = 0;
+        private boolean hasType3Fonts = false;
+        private boolean hasTablePattern = false;
+        private boolean hasImage = false;
+        private boolean hasText = false;
+        private TextChunk previousTextChunk = null;
+
+        void addImageArea(double area) {
+            totalImageArea += area;
+            hasImage = true;
         }
-        // Low text coverage suggests image-based content
-        if (signals.getTextCoverage() < config.getTextCoverageThreshold()) {
-            return true;
+
+        void processTextChunk(TextChunk textChunk) {
+            totalTextArea += calculateBoundingBoxArea(textChunk.getBoundingBox());
+            hasText = true;
+            checkFontProperties(textChunk);
+            checkTablePattern(textChunk);
         }
-        // Many fonts without ToUnicode mapping
-        if (signals.getMissingToUnicodeRatio() > config.getMissingToUnicodeThreshold()) {
-            return true;
+
+        private void checkFontProperties(TextChunk textChunk) {
+            if (textChunk.getFontName() == null) {
+                return;
+            }
+            totalFonts++;
+            if (textChunk.getFontName().contains("Type3")) {
+                hasType3Fonts = true;
+            }
+            if (hasUnmappedCharacters(textChunk.getValue())) {
+                fontsWithoutToUnicode++;
+            }
         }
-        // Type3 fonts are image-based glyphs
-        if (signals.isHasType3Fonts()) {
-            return true;
+
+        /**
+         * Checks if text contains unmapped/replacement characters.
+         * These indicate fonts without proper ToUnicode mapping.
+         */
+        private boolean hasUnmappedCharacters(String text) {
+            if (text == null || text.isEmpty()) {
+                return false;
+            }
+            for (char c : text.toCharArray()) {
+                // Unicode replacement character
+                if (c == '\uFFFD') {
+                    return true;
+                }
+                // Private Use Area (often used for unmapped glyphs)
+                if (c >= '\uE000' && c <= '\uF8FF') {
+                    return true;
+                }
+            }
+            return false;
         }
-        return false;
+
+        private void checkTablePattern(TextChunk current) {
+            if (current.isWhiteSpaceChunk()) {
+                return;
+            }
+            if (previousTextChunk != null && areSuspiciousTextChunks(previousTextChunk, current)) {
+                hasTablePattern = true;
+            }
+            previousTextChunk = current;
+        }
+
+        /**
+         * Detects suspicious text chunks that may indicate table structure.
+         * Uses the same logic as AbstractTableProcessor.areSuspiciousTextChunks().
+         */
+        private boolean areSuspiciousTextChunks(TextChunk previous, TextChunk current) {
+            // Text going backwards suggests multi-column layout or table
+            if (previous.getTopY() < current.getBottomY()) {
+                return true;
+            }
+            // Same baseline with large horizontal gap suggests table cell boundaries
+            if (NodeUtils.areCloseNumbers(previous.getBaseLine(), current.getBaseLine(),
+                    current.getHeight() * Y_DIFFERENCE_EPSILON)) {
+                return current.getLeftX() - previous.getRightX() > current.getHeight() * X_DIFFERENCE_EPSILON;
+            }
+            return false;
+        }
+
+        TriageSignals buildSignals(double pageArea) {
+            double imageAreaRatio = totalImageArea / pageArea;
+            double textCoverage = totalTextArea / pageArea;
+            double missingToUnicodeRatio = totalFonts > 0 ? (double) fontsWithoutToUnicode / totalFonts : 0;
+            return new TriageSignals(imageAreaRatio, textCoverage, missingToUnicodeRatio,
+                    hasType3Fonts, hasTablePattern, hasTablePattern, hasImage, hasText);
+        }
+    }
+
+    /**
+     * Checks if page needs OCR processing.
+     * Only returns true when page contains images but no text chunks.
+     * Same logic as OCRProcessor.isPossibleScannedPage().
+     */
+    private static boolean checkNeedsOcr(TriageSignals signals) {
+        // Page has images but no text at all - pure image page needs OCR
+        return signals.isHasImage() && !signals.isHasText();
     }
 
     /**
@@ -240,76 +302,5 @@ public class TriageProcessor {
         double width = box.getRightX() - box.getLeftX();
         double height = box.getTopY() - box.getBottomY();
         return Math.max(0, width * height);
-    }
-
-    /**
-     * Checks if text contains unmapped/replacement characters.
-     * These indicate fonts without proper ToUnicode mapping.
-     */
-    private static boolean hasUnmappedCharacters(String text) {
-        if (text == null || text.isEmpty()) {
-            return false;
-        }
-        for (char c : text.toCharArray()) {
-            // Unicode replacement character
-            if (c == '\uFFFD') {
-                return true;
-            }
-            // Private Use Area (often used for unmapped glyphs)
-            if (c >= '\uE000' && c <= '\uF8FF') {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Detects suspicious text gaps that may indicate table structure.
-     * Large horizontal gaps on the same baseline suggest table cell boundaries.
-     */
-    private static boolean detectSuspiciousTextGap(TextChunk previous, TextChunk current) {
-        if (previous == null || current == null) {
-            return false;
-        }
-        BoundingBox prevBox = previous.getBoundingBox();
-        BoundingBox currBox = current.getBoundingBox();
-        if (prevBox == null || currBox == null) {
-            return false;
-        }
-
-        // Check if on same baseline (within tolerance)
-        double baselineTolerance = previous.getFontSize() * 0.3;
-        boolean sameBaseline = Math.abs(prevBox.getBottomY() - currBox.getBottomY()) < baselineTolerance;
-
-        if (sameBaseline) {
-            // Check for large horizontal gap (more than 3x character height)
-            double xGap = currBox.getLeftX() - prevBox.getRightX();
-            double charHeight = previous.getFontSize();
-            if (charHeight > 0 && xGap > charHeight * 3) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Detects grid-aligned text patterns.
-     * Text going backwards (multi-column layout) or aligned columns suggest tables.
-     */
-    private static boolean detectGridAlignment(TextChunk previous, TextChunk current) {
-        if (previous == null || current == null) {
-            return false;
-        }
-        BoundingBox prevBox = previous.getBoundingBox();
-        BoundingBox currBox = current.getBoundingBox();
-        if (prevBox == null || currBox == null) {
-            return false;
-        }
-
-        // Text going backwards suggests multi-column layout
-        if (prevBox.getTopY() < currBox.getBottomY()) {
-            return true;
-        }
-        return false;
     }
 }

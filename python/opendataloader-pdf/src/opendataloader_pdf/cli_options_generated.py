@@ -144,6 +144,15 @@ CLI_OPTIONS: List[Dict[str, Any]] = [
         "default": "png",
         "description": "Output format for extracted images. Values: png, jpeg. Default: png",
     },
+    {
+        "name": "hybrid",
+        "python_name": "hybrid",
+        "short_name": None,
+        "type": "boolean",
+        "required": False,
+        "default": False,
+        "description": "Enable hybrid mode for AI processing. Outputs triage.json, fast_pages.json, and page images for AI-path pages",
+    },
 ]
 
 

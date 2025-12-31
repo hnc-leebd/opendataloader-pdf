@@ -9,6 +9,9 @@ package org.opendataloader.pdf.processors;
 
 import org.opendataloader.pdf.containers.StaticLayoutContainers;
 import org.opendataloader.pdf.processors.readingorder.XYCutPlusPlusSorter;
+import org.opendataloader.pdf.processors.TriageProcessor;
+import org.opendataloader.pdf.processors.TriageProcessor.PageTriage;
+import org.opendataloader.pdf.json.HybridWriter;
 import org.opendataloader.pdf.json.JsonWriter;
 import org.opendataloader.pdf.markdown.MarkdownGenerator;
 import org.opendataloader.pdf.markdown.MarkdownGeneratorFactory;
@@ -33,6 +36,7 @@ import org.verapdf.pd.PDDocument;
 import org.verapdf.tools.StaticResources;
 import org.verapdf.wcag.algorithms.entities.IObject;
 import org.verapdf.wcag.algorithms.entities.SemanticTextNode;
+import org.verapdf.wcag.algorithms.entities.content.IChunk;
 import org.verapdf.wcag.algorithms.entities.content.LineChunk;
 import org.verapdf.wcag.algorithms.entities.geometry.BoundingBox;
 import org.verapdf.wcag.algorithms.entities.tables.TableBordersCollection;
@@ -65,11 +69,88 @@ public class DocumentProcessor {
     public static void processFile(String inputPdfName, Config config) throws IOException {
         preprocessing(inputPdfName, config);
         calculateDocumentInfo();
+
+        // Hybrid mode: triage pages and generate outputs for fast/AI paths
+        if (config.isHybridMode()) {
+            processHybridMode(inputPdfName, config);
+            return;
+        }
+
         List<List<IObject>> contents = StaticLayoutContainers.isUseStructTree() ?
             TaggedDocumentProcessor.processDocument(inputPdfName, config) :
             processDocument(inputPdfName, config);
         sortContents(contents, config);
         generateOutputs(inputPdfName, contents, config);
+    }
+
+    /**
+     * Processes a PDF file in hybrid mode.
+     * Triages each page to determine processing path (fast vs AI),
+     * extracts content for fast pages, and renders images for AI pages.
+     *
+     * @param inputPdfName the path to the input PDF file
+     * @param config the configuration settings
+     * @throws IOException if unable to process the file
+     */
+    private static void processHybridMode(String inputPdfName, Config config) throws IOException {
+        File inputPDF = new File(inputPdfName);
+        File outputDir = new File(config.getOutputFolder());
+        outputDir.mkdirs();
+
+        List<PageTriage> triageResults = new ArrayList<>();
+        Map<Integer, List<IObject>> fastPageContents = new HashMap<>();
+        List<Integer> aiPageNumbers = new ArrayList<>();
+
+        int numberOfPages = StaticContainers.getDocument().getNumberOfPages();
+
+        // Phase 1: Triage all pages
+        LOGGER.log(Level.INFO, "Hybrid mode: triaging {0} pages", numberOfPages);
+        for (int pageNumber = 0; pageNumber < numberOfPages; pageNumber++) {
+            List<IChunk> rawContents = StaticContainers.getDocument().getArtifacts(pageNumber);
+            BoundingBox pageBoundingBox = getPageBoundingBox(pageNumber);
+            PageTriage triage = TriageProcessor.triagePage(pageNumber, rawContents, pageBoundingBox, config);
+            triageResults.add(triage);
+
+            if (TriageProcessor.PATH_FAST.equals(triage.getPath())) {
+                LOGGER.log(Level.FINE, "Page {0}: fast path", pageNumber + 1);
+            } else {
+                LOGGER.log(Level.FINE, "Page {0}: AI path (OCR={1}, TableAI={2})",
+                    new Object[]{pageNumber + 1, triage.isNeedsOcr(), triage.isNeedsTableAi()});
+                aiPageNumbers.add(pageNumber);
+            }
+        }
+
+        // Phase 2: Process fast pages with full extraction pipeline
+        List<Integer> fastPageNumbers = new ArrayList<>();
+        for (PageTriage triage : triageResults) {
+            if (TriageProcessor.PATH_FAST.equals(triage.getPath())) {
+                fastPageNumbers.add(triage.getPageNumber());
+            }
+        }
+
+        if (!fastPageNumbers.isEmpty()) {
+            LOGGER.log(Level.INFO, "Hybrid mode: processing {0} fast pages", fastPageNumbers.size());
+            List<List<IObject>> allContents = processDocument(inputPdfName, config);
+            sortContents(allContents, config);
+
+            for (int pageNumber : fastPageNumbers) {
+                fastPageContents.put(pageNumber, allContents.get(pageNumber));
+            }
+        }
+
+        // Phase 3: Write outputs
+        LOGGER.log(Level.INFO, "Hybrid mode: writing triage.json");
+        HybridWriter.writeTriageJson(outputDir, triageResults);
+
+        LOGGER.log(Level.INFO, "Hybrid mode: writing fast_pages.json");
+        HybridWriter.writeFastPagesJson(outputDir, inputPDF.getName(), fastPageContents);
+
+        if (!aiPageNumbers.isEmpty()) {
+            LOGGER.log(Level.INFO, "Hybrid mode: rendering {0} AI page images", aiPageNumbers.size());
+            HybridWriter.writeAiPageImages(outputDir, inputPdfName, config.getPassword(), aiPageNumbers);
+        }
+
+        LOGGER.log(Level.INFO, "Hybrid mode: complete");
     }
 
     private static List<List<IObject>> processDocument(String inputPdfName, Config config) throws IOException {

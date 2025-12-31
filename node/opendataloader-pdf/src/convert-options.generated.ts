@@ -35,6 +35,8 @@ export interface ConvertOptions {
   imageOutput?: string;
   /** Output format for extracted images. Values: png, jpeg. Default: png */
   imageFormat?: string;
+  /** Enable hybrid mode for AI processing. Outputs triage.json, fast_pages.json, and page images for AI-path pages */
+  hybrid?: boolean;
 }
 
 /**
@@ -56,6 +58,7 @@ export interface CliOptions {
   htmlPageSeparator?: string;
   imageOutput?: string;
   imageFormat?: string;
+  hybrid?: boolean;
 }
 
 /**
@@ -108,6 +111,9 @@ export function buildConvertOptions(cliOptions: CliOptions): ConvertOptions {
   }
   if (cliOptions.imageFormat) {
     convertOptions.imageFormat = cliOptions.imageFormat;
+  }
+  if (cliOptions.hybrid) {
+    convertOptions.hybrid = true;
   }
 
   return convertOptions;
@@ -175,6 +181,9 @@ export function buildArgs(options: ConvertOptions): string[] {
   }
   if (options.imageFormat) {
     args.push('--image-format', options.imageFormat);
+  }
+  if (options.hybrid) {
+    args.push('--hybrid');
   }
 
   return args;

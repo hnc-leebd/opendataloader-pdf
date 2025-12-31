@@ -26,6 +26,7 @@ def convert(
     html_page_separator: Optional[str] = None,
     image_output: Optional[str] = None,
     image_format: Optional[str] = None,
+    hybrid: bool = False,
 ) -> None:
     """
     Convert PDF(s) into the requested output format(s).
@@ -47,6 +48,7 @@ def convert(
         html_page_separator: Separator between pages in HTML output. Use %page-number% for page numbers. Default: none
         image_output: Image output mode. Values: off (no images), embedded (Base64 data URIs), external (file references). Default: external
         image_format: Output format for extracted images. Values: png, jpeg. Default: png
+        hybrid: Enable hybrid mode for AI processing. Outputs triage.json, fast_pages.json, and page images for AI-path pages
     """
     args: List[str] = []
 
@@ -94,5 +96,7 @@ def convert(
         args.extend(["--image-output", image_output])
     if image_format:
         args.extend(["--image-format", image_format])
+    if hybrid:
+        args.append("--hybrid")
 
     run_jar(args, quiet)

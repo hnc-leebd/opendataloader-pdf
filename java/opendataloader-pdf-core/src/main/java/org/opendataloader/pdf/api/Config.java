@@ -45,6 +45,12 @@ public class Config {
     private String imageFormat = IMAGE_FORMAT_PNG;
     private final FilterConfig filterConfig = new FilterConfig();
 
+    // Hybrid mode settings
+    private boolean hybridMode = false;
+    private double imageAreaThreshold = 0.05;       // 5% - page triggers OCR if image area exceeds this
+    private double textCoverageThreshold = 0.10;    // 10% - page triggers OCR if text coverage below this
+    private double missingToUnicodeThreshold = 0.30; // 30% - page triggers OCR if fonts missing ToUnicode exceed this
+
     /** Table detection method: default (border-based detection). */
     public static final String TABLE_METHOD_DEFAULT = "default";
     /** Table detection method: cluster-based detection (includes border-based). */
@@ -569,6 +575,83 @@ public class Config {
      */
     public static boolean isValidImageFormat(String format) {
         return format != null && imageFormatOptions.contains(format.toLowerCase(Locale.ROOT));
+    }
+
+    /**
+     * Checks if hybrid mode is enabled.
+     * Hybrid mode outputs triage.json, fast_pages.json, and page images for AI processing.
+     *
+     * @return true if hybrid mode is enabled, false otherwise.
+     */
+    public boolean isHybridMode() {
+        return hybridMode;
+    }
+
+    /**
+     * Enables or disables hybrid mode.
+     * Hybrid mode outputs triage.json, fast_pages.json, and page images for AI processing.
+     *
+     * @param hybridMode true to enable hybrid mode, false to disable.
+     */
+    public void setHybridMode(boolean hybridMode) {
+        this.hybridMode = hybridMode;
+    }
+
+    /**
+     * Gets the image area threshold for OCR triage.
+     * Pages with image area ratio exceeding this threshold are routed to AI processing.
+     *
+     * @return The image area threshold (0.0 to 1.0).
+     */
+    public double getImageAreaThreshold() {
+        return imageAreaThreshold;
+    }
+
+    /**
+     * Sets the image area threshold for OCR triage.
+     *
+     * @param imageAreaThreshold The threshold (0.0 to 1.0). Default is 0.05 (5%).
+     */
+    public void setImageAreaThreshold(double imageAreaThreshold) {
+        this.imageAreaThreshold = imageAreaThreshold;
+    }
+
+    /**
+     * Gets the text coverage threshold for OCR triage.
+     * Pages with text coverage below this threshold are routed to AI processing.
+     *
+     * @return The text coverage threshold (0.0 to 1.0).
+     */
+    public double getTextCoverageThreshold() {
+        return textCoverageThreshold;
+    }
+
+    /**
+     * Sets the text coverage threshold for OCR triage.
+     *
+     * @param textCoverageThreshold The threshold (0.0 to 1.0). Default is 0.10 (10%).
+     */
+    public void setTextCoverageThreshold(double textCoverageThreshold) {
+        this.textCoverageThreshold = textCoverageThreshold;
+    }
+
+    /**
+     * Gets the missing ToUnicode threshold for OCR triage.
+     * Pages where the ratio of fonts missing ToUnicode mapping exceeds this are routed to AI processing.
+     *
+     * @return The missing ToUnicode threshold (0.0 to 1.0).
+     */
+    public double getMissingToUnicodeThreshold() {
+        return missingToUnicodeThreshold;
+    }
+
+    /**
+     * Sets the missing ToUnicode threshold for OCR triage.
+     *
+     * @param missingToUnicodeThreshold The threshold (0.0 to 1.0). Default is 0.30 (30%).
+     */
+    public void setMissingToUnicodeThreshold(double missingToUnicodeThreshold) {
+        this.missingToUnicodeThreshold = missingToUnicodeThreshold;
     }
 
 }

@@ -12,7 +12,9 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-dependencies = []
+dependencies = [
+    "docling>=2.15.0",
+]
 
 [project.scripts]
 opendataloader-pdf = "opendataloader_pdf.wrapper:main"

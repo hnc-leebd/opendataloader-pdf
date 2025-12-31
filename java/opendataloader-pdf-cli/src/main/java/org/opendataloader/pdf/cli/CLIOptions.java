@@ -86,6 +86,10 @@ public class CLIOptions {
     private static final String IMAGE_FORMAT_LONG_OPTION = "image-format";
     private static final String IMAGE_FORMAT_DESC = "Output format for extracted images. Values: png, jpeg. Default: png";
 
+    // ===== Hybrid Mode =====
+    private static final String HYBRID_LONG_OPTION = "hybrid";
+    private static final String HYBRID_DESC = "Enable hybrid mode for AI processing. Outputs triage.json, fast_pages.json, and page images for AI-path pages";
+
     // ===== Export Options (internal) =====
     public static final String EXPORT_OPTIONS_LONG_OPTION = "export-options";
 
@@ -121,6 +125,7 @@ public class CLIOptions {
             new OptionDefinition(HTML_PAGE_SEPARATOR_LONG_OPTION, null, "string", null, HTML_PAGE_SEPARATOR_DESC, true),
             new OptionDefinition(IMAGE_OUTPUT_LONG_OPTION, null, "string", "external", IMAGE_OUTPUT_DESC, true),
             new OptionDefinition(IMAGE_FORMAT_LONG_OPTION, null, "string", "png", IMAGE_FORMAT_DESC, true),
+            new OptionDefinition(HYBRID_LONG_OPTION, null, "boolean", false, HYBRID_DESC, true),
             new OptionDefinition(EXPORT_OPTIONS_LONG_OPTION, null, "boolean", null, null, false),
 
             // Legacy options (not exported, for backward compatibility)
@@ -196,6 +201,9 @@ public class CLIOptions {
         applyFormatOption(config, commandLine);
         applyTableMethodOption(config, commandLine);
         applyImageOptions(config, commandLine);
+        if (commandLine.hasOption(HYBRID_LONG_OPTION)) {
+            config.setHybridMode(true);
+        }
         return config;
     }
 

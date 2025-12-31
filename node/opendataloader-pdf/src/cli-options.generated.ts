@@ -22,4 +22,5 @@ export function registerCliOptions(program: Command): void {
   program.option('--html-page-separator <value>', 'Separator between pages in HTML output. Use %page-number% for page numbers. Default: none');
   program.option('--image-output <value>', 'Image output mode. Values: off (no images), embedded (Base64 data URIs), external (file references). Default: external');
   program.option('--image-format <value>', 'Output format for extracted images. Values: png, jpeg. Default: png');
+  program.option('--hybrid', 'Enable hybrid mode for AI processing. Outputs triage.json, fast_pages.json, and page images for AI-path pages');
 }

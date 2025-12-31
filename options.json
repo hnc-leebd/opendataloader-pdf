@@ -119,6 +119,14 @@
       "required": false,
       "default": "png",
       "description": "Output format for extracted images. Values: png, jpeg. Default: png"
+    },
+    {
+      "name": "hybrid",
+      "shortName": null,
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Enable hybrid mode for AI processing. Outputs triage.json, fast_pages.json, and page images for AI-path pages"
     }
   ]
 }

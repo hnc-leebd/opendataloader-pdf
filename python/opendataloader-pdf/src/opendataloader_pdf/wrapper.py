@@ -2,14 +2,62 @@ import argparse
 import subprocess
 import sys
 import warnings
-from typing import List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 from .cli_options_generated import add_options_to_parser
 from .convert_generated import convert
 from .runner import run_jar
 
 # Re-export for backward compatibility
-__all__ = ["convert", "run", "run_jar", "main"]
+__all__ = ["convert", "convert_with_ai", "run", "run_jar", "main"]
+
+
+def convert_with_ai(
+    input_path: Union[str, Path],
+    output_dir: Optional[Union[str, Path]] = None,
+    password: Optional[str] = None,
+    config: Optional["HybridPipelineConfig"] = None,
+) -> Dict[str, Any]:
+    """Convert PDF using hybrid architecture with AI models.
+
+    Combines fast JAR preprocessing with AI model processing:
+    - Simple pages: Fast extraction via JAR
+    - Complex pages (scanned, tables, etc.): AI model processing
+
+    Args:
+        input_path: Path to the input PDF file.
+        output_dir: Directory for output files. Uses temp dir if not specified.
+        password: Password for encrypted PDF files.
+        config: Hybrid pipeline configuration. Uses defaults if not provided.
+
+    Returns:
+        Dictionary containing the merged JSON output following OpenDataLoader schema.
+
+    Example:
+        >>> from opendataloader_pdf import convert_with_ai
+        >>> result = convert_with_ai("document.pdf")
+        >>> print(result["number of pages"])
+
+        # With custom configuration
+        >>> from opendataloader_pdf.hybrid import HybridPipelineConfig
+        >>> config = HybridPipelineConfig.quality_mode()
+        >>> result = convert_with_ai("document.pdf", config=config)
+
+    Note:
+        Requires AI dependencies: pip install opendataloader-pdf[ai]
+    """
+    from .hybrid import HybridPipeline, HybridPipelineConfig
+
+    pipeline = HybridPipeline(config or HybridPipelineConfig())
+    return pipeline.process(input_path, output_dir, password)
+
+
+# Type hint for import
+try:
+    from .hybrid import HybridPipelineConfig
+except ImportError:
+    HybridPipelineConfig = None  # type: ignore
 
 
 # Deprecated : Use `convert()` instead. This function will be removed in a future version.

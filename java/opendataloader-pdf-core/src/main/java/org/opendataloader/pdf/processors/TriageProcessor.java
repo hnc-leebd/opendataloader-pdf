@@ -47,6 +47,10 @@ public class TriageProcessor {
     // Isolated patterns are likely not tables
     private static final int MIN_CONSECUTIVE_PATTERNS = 2;
 
+    // High pattern count threshold: if pattern count exceeds this,
+    // skip consecutive pattern check (handles complex tables with scattered patterns)
+    private static final int HIGH_PATTERN_COUNT_THRESHOLD = 30;
+
     private TriageProcessor() {
         // Utility class
     }
@@ -311,9 +315,11 @@ public class TriageProcessor {
 
             // Table detection requires:
             // 1. At least MIN_CONSECUTIVE_PATTERNS consecutive patterns (filters isolated patterns)
+            //    OR high pattern count (handles complex tables with scattered patterns)
             // 2. Either absolute count OR high density with minimum patterns
             boolean hasConsecutivePatterns = maxConsecutiveStreak >= MIN_CONSECUTIVE_PATTERNS;
-            boolean hasTablePattern = hasConsecutivePatterns
+            boolean hasHighPatternCount = tablePatternCount >= HIGH_PATTERN_COUNT_THRESHOLD;
+            boolean hasTablePattern = (hasConsecutivePatterns || hasHighPatternCount)
                     && (tablePatternCount >= MIN_TABLE_PATTERNS
                         || (patternDensity >= MIN_PATTERN_DENSITY && tablePatternCount >= MIN_PATTERNS_FOR_DENSITY));
 

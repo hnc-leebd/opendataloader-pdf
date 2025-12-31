@@ -9,6 +9,8 @@ package org.opendataloader.pdf.processors;
 
 import org.verapdf.wcag.algorithms.entities.content.IChunk;
 import org.verapdf.wcag.algorithms.entities.content.ImageChunk;
+import org.verapdf.wcag.algorithms.entities.content.LineArtChunk;
+import org.verapdf.wcag.algorithms.entities.content.LineChunk;
 import org.verapdf.wcag.algorithms.entities.content.TextChunk;
 import org.verapdf.wcag.algorithms.entities.geometry.BoundingBox;
 import org.verapdf.wcag.algorithms.semanticalgorithms.utils.NodeUtils;
@@ -50,6 +52,12 @@ public class TriageProcessor {
     // High pattern count threshold: if pattern count exceeds this,
     // skip consecutive pattern check (handles complex tables with scattered patterns)
     private static final int HIGH_PATTERN_COUNT_THRESHOLD = 30;
+
+    // Vector graphics thresholds for table border detection
+    // Minimum number of line segments to suggest table borders
+    private static final int MIN_LINE_COUNT_FOR_TABLE = 8;
+    // Minimum number of horizontal + vertical line pairs for grid pattern
+    private static final int MIN_GRID_LINES = 4;
 
     private TriageProcessor() {
         // Utility class
@@ -193,6 +201,10 @@ public class TriageProcessor {
                 accumulator.addImageArea(calculateBoundingBoxArea(chunk.getBoundingBox()));
             } else if (chunk instanceof TextChunk) {
                 accumulator.processTextChunk((TextChunk) chunk);
+            } else if (chunk instanceof LineChunk) {
+                accumulator.processLineChunk((LineChunk) chunk);
+            } else if (chunk instanceof LineArtChunk) {
+                accumulator.processLineArtChunk();
             }
         }
 
@@ -215,10 +227,31 @@ public class TriageProcessor {
         private boolean hasImage = false;
         private boolean hasText = false;
         private TextChunk previousTextChunk = null;
+        private int horizontalLineCount = 0;
+        private int verticalLineCount = 0;
+        private int lineArtCount = 0;
 
         void addImageArea(double area) {
             totalImageArea += area;
             hasImage = true;
+        }
+
+        void processLineChunk(LineChunk lineChunk) {
+            BoundingBox box = lineChunk.getBoundingBox();
+            double width = box.getRightX() - box.getLeftX();
+            double height = box.getTopY() - box.getBottomY();
+            // Horizontal line: width >> height
+            if (width > height * 3) {
+                horizontalLineCount++;
+            }
+            // Vertical line: height >> width
+            else if (height > width * 3) {
+                verticalLineCount++;
+            }
+        }
+
+        void processLineArtChunk() {
+            lineArtCount++;
         }
 
         void processTextChunk(TextChunk textChunk) {
@@ -313,15 +346,27 @@ public class TriageProcessor {
                     ? (double) tablePatternCount / textChunkCount
                     : 0;
 
+            // Vector graphics based table detection
+            // Grid pattern: both horizontal and vertical lines present
+            boolean hasGridLines = horizontalLineCount >= MIN_GRID_LINES && verticalLineCount >= MIN_GRID_LINES;
+            // Sufficient line segments for table borders
+            boolean hasTableBorderLines = (horizontalLineCount + verticalLineCount) >= MIN_LINE_COUNT_FOR_TABLE;
+            // LineArt (rectangles, paths) can also indicate table structure
+            boolean hasSignificantLineArt = lineArtCount >= MIN_LINE_COUNT_FOR_TABLE;
+
             // Table detection requires:
             // 1. At least MIN_CONSECUTIVE_PATTERNS consecutive patterns (filters isolated patterns)
             //    OR high pattern count (handles complex tables with scattered patterns)
-            // 2. Either absolute count OR high density with minimum patterns
+            //    OR vector graphics indicating table borders
+            // 2. Either absolute count OR high density with minimum patterns OR vector graphics
             boolean hasConsecutivePatterns = maxConsecutiveStreak >= MIN_CONSECUTIVE_PATTERNS;
             boolean hasHighPatternCount = tablePatternCount >= HIGH_PATTERN_COUNT_THRESHOLD;
-            boolean hasTablePattern = (hasConsecutivePatterns || hasHighPatternCount)
-                    && (tablePatternCount >= MIN_TABLE_PATTERNS
-                        || (patternDensity >= MIN_PATTERN_DENSITY && tablePatternCount >= MIN_PATTERNS_FOR_DENSITY));
+            boolean hasVectorTableBorders = hasGridLines || hasTableBorderLines || hasSignificantLineArt;
+
+            boolean hasTablePattern = hasVectorTableBorders
+                    || ((hasConsecutivePatterns || hasHighPatternCount)
+                        && (tablePatternCount >= MIN_TABLE_PATTERNS
+                            || (patternDensity >= MIN_PATTERN_DENSITY && tablePatternCount >= MIN_PATTERNS_FOR_DENSITY)));
 
             return new TriageSignals(imageAreaRatio, textCoverage, missingToUnicodeRatio,
                     hasType3Fonts, hasTablePattern, hasTablePattern, hasImage, hasText);

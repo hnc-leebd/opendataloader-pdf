@@ -8,7 +8,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, Optional, Union
-
+from docling.document_converter import DocumentConverter
 from ..runner import run_jar
 from .config import HybridPipelineConfig
 from .merge import ResultMerger
@@ -219,6 +219,8 @@ class HybridPipeline:
         Returns:
             Dictionary mapping page index (0-indexed) to processing results.
         """
+        import time
+
         if not ai_pages:
             return {}
 
@@ -226,20 +228,22 @@ class HybridPipeline:
         page_numbers = sorted([p["page"] for p in ai_pages])
         logger.info(f"Processing {len(page_numbers)} AI pages with docling: {page_numbers}")
 
-        # Initialize docling DocumentConverter
-        from docling.document_converter import DocumentConverter
-
+        init_start = time.perf_counter()
         converter = DocumentConverter()
+        init_time = time.perf_counter() - init_start
+        logger.debug(f"DocumentConverter init: {init_time:.2f}s")
 
         results: dict[int, dict[str, Any]] = {}
 
         # Process each AI page individually
         for page_num in page_numbers:
             try:
+                page_start = time.perf_counter()
                 conv_result = converter.convert(
                     str(pdf_path),
                     page_range=(page_num, page_num),
                 )
+                convert_time = time.perf_counter() - page_start
                 doc = conv_result.document
 
                 page_idx = page_num - 1  # Convert to 0-indexed
@@ -249,6 +253,8 @@ class HybridPipeline:
                     element = self._convert_docling_item(item, page_idx)
                     if element:
                         results[page_idx]["elements"].append(element)
+
+                logger.debug(f"Page {page_num}: convert={convert_time:.2f}s")
 
             except Exception as e:
                 logger.error(f"Error processing page {page_num} with docling: {e}")

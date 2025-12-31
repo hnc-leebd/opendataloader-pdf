@@ -97,6 +97,8 @@ public class TriageDebugTest {
             int lineArtCount = 0;
             int rowSeparatorPatternCount = 0;
             boolean lastWasHorizontalLine = false;
+            double pageWidth = pageBoundingBox.getRightX() - pageBoundingBox.getLeftX();
+            java.util.List<double[]> shortLines = new java.util.ArrayList<>(); // [leftX, width]
 
             for (IChunk chunk : rawContents) {
                 if (chunk instanceof LineChunk) {
@@ -107,6 +109,10 @@ public class TriageDebugTest {
                         horizontalLineCount++;
                         if (!lastWasHorizontalLine) {
                             rowSeparatorPatternCount++;
+                        }
+                        // Track short lines (< 50% page width)
+                        if (pageWidth > 0 && width < pageWidth * 0.5) {
+                            shortLines.add(new double[]{box.getLeftX(), width});
                         }
                         lastWasHorizontalLine = true;
                     } else if (height > width * 3) {
@@ -173,6 +179,10 @@ public class TriageDebugTest {
             System.out.println("    - Vertical lines: " + verticalLineCount);
             System.out.println("    - LineArt chunks: " + lineArtCount);
             System.out.println("    - Row separator patterns: " + rowSeparatorPatternCount);
+            System.out.println("    - Short lines (leftX, width): ");
+            for (double[] line : shortLines) {
+                System.out.println("        [" + String.format("%.1f", line[0]) + ", " + String.format("%.1f", line[1]) + "]");
+            }
         }
         System.out.println();
     }

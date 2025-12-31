@@ -64,6 +64,12 @@ public class TriageProcessor {
     // Minimum number of line-text-line alternations to detect row separator pattern
     private static final int MIN_ROW_SEPARATOR_PATTERN = 5;
 
+    // Aligned short horizontal lines pattern: short lines (< 50% page width) with same length
+    // vertically aligned suggest table row separators
+    private static final double SHORT_LINE_MAX_WIDTH_RATIO = 0.5;
+    private static final double LINE_LENGTH_TOLERANCE = 0.05; // 5% tolerance for "same length"
+    private static final int MIN_ALIGNED_SHORT_LINES = 2; // need 2+ lines with same X and length
+
     private TriageProcessor() {
         // Utility class
     }
@@ -199,7 +205,8 @@ public class TriageProcessor {
             return new TriageSignals(0, 0, 0, false, false, false, false, false);
         }
 
-        SignalAccumulator accumulator = new SignalAccumulator();
+        double pageWidth = pageBoundingBox.getRightX() - pageBoundingBox.getLeftX();
+        SignalAccumulator accumulator = new SignalAccumulator(pageWidth);
 
         for (IChunk chunk : contents) {
             if (chunk instanceof ImageChunk) {
@@ -220,6 +227,7 @@ public class TriageProcessor {
      * Helper class to accumulate signals during page analysis.
      */
     private static class SignalAccumulator {
+        private final double pageWidth;
         private double totalImageArea = 0;
         private double totalTextArea = 0;
         private int totalFonts = 0;
@@ -238,6 +246,12 @@ public class TriageProcessor {
         // Row separator pattern tracking: line-text-line alternation
         private boolean lastWasHorizontalLine = false;
         private int rowSeparatorPatternCount = 0;
+        // Aligned short horizontal lines tracking: stores (leftX, width) pairs
+        private java.util.List<double[]> shortHorizontalLines = new java.util.ArrayList<>();
+
+        SignalAccumulator(double pageWidth) {
+            this.pageWidth = pageWidth;
+        }
 
         void addImageArea(double area) {
             totalImageArea += area;
@@ -256,6 +270,10 @@ public class TriageProcessor {
                 if (!lastWasHorizontalLine) {
                     // Text was between this line and the previous line
                     rowSeparatorPatternCount++;
+                }
+                // Track short horizontal lines (< 50% page width) for aligned pattern detection
+                if (pageWidth > 0 && width < pageWidth * SHORT_LINE_MAX_WIDTH_RATIO) {
+                    shortHorizontalLines.add(new double[]{box.getLeftX(), width});
                 }
                 lastWasHorizontalLine = true;
             }
@@ -353,6 +371,42 @@ public class TriageProcessor {
             return false;
         }
 
+        /**
+         * Checks if there are aligned short horizontal lines with same length and same X position.
+         * Short lines (< 50% page width) with matching leftX and width suggest table row separators.
+         * Requires MIN_ALIGNED_SHORT_LINES lines with the same position and length.
+         */
+        private boolean hasAlignedShortHorizontalLines() {
+            if (shortHorizontalLines.size() < MIN_ALIGNED_SHORT_LINES) {
+                return false;
+            }
+            // Count lines with same leftX and length (within tolerance)
+            for (int i = 0; i < shortHorizontalLines.size(); i++) {
+                double[] refLine = shortHorizontalLines.get(i);
+                double refLeftX = refLine[0];
+                double refLen = refLine[1];
+                int matchCount = 1; // count the reference line itself
+                for (int j = i + 1; j < shortHorizontalLines.size(); j++) {
+                    double[] line = shortHorizontalLines.get(j);
+                    double leftX = line[0];
+                    double len = line[1];
+                    // Check both leftX and length match within tolerance
+                    double xDiff = Math.abs(refLeftX - leftX);
+                    double lenDiff = Math.abs(refLen - len);
+                    double maxLen = Math.max(refLen, len);
+                    boolean xMatches = maxLen > 0 && xDiff / maxLen <= LINE_LENGTH_TOLERANCE;
+                    boolean lenMatches = maxLen > 0 && lenDiff / maxLen <= LINE_LENGTH_TOLERANCE;
+                    if (xMatches && lenMatches) {
+                        matchCount++;
+                        if (matchCount >= MIN_ALIGNED_SHORT_LINES) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
         TriageSignals buildSignals(double pageArea) {
             double imageAreaRatio = totalImageArea / pageArea;
             double textCoverage = totalTextArea / pageArea;
@@ -372,6 +426,8 @@ public class TriageProcessor {
             boolean hasSignificantLineArt = lineArtCount >= MIN_LINE_COUNT_FOR_TABLE;
             // Row separator pattern: horizontal lines alternating with text (line-text-line-text-line)
             boolean hasRowSeparatorPattern = rowSeparatorPatternCount >= MIN_ROW_SEPARATOR_PATTERN;
+            // Aligned short horizontal lines: short lines (< 50% page width) with same length
+            boolean hasAlignedShortLines = hasAlignedShortHorizontalLines();
 
             // Table detection requires:
             // 1. At least MIN_CONSECUTIVE_PATTERNS consecutive patterns (filters isolated patterns)
@@ -381,7 +437,7 @@ public class TriageProcessor {
             boolean hasConsecutivePatterns = maxConsecutiveStreak >= MIN_CONSECUTIVE_PATTERNS;
             boolean hasHighPatternCount = tablePatternCount >= HIGH_PATTERN_COUNT_THRESHOLD;
             boolean hasVectorTableBorders = hasGridLines || hasTableBorderLines || hasSignificantLineArt
-                    || hasRowSeparatorPattern;
+                    || hasRowSeparatorPattern || hasAlignedShortLines;
 
             boolean hasTablePattern = hasVectorTableBorders
                     || ((hasConsecutivePatterns || hasHighPatternCount)

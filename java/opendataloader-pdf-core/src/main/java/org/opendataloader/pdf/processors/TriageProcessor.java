@@ -34,6 +34,11 @@ public class TriageProcessor {
     // Reduces false positives from simple multi-column layouts or indented text
     private static final int MIN_TABLE_PATTERNS = 3;
 
+    // Pattern density threshold (patterns / text chunks)
+    // High density with fewer absolute patterns can still indicate a table
+    private static final double MIN_PATTERN_DENSITY = 0.10;
+    private static final int MIN_PATTERNS_FOR_DENSITY = 2;
+
     private TriageProcessor() {
         // Utility class
     }
@@ -192,6 +197,7 @@ public class TriageProcessor {
         private int fontsWithoutToUnicode = 0;
         private boolean hasType3Fonts = false;
         private int tablePatternCount = 0;
+        private int textChunkCount = 0;
         private boolean hasImage = false;
         private boolean hasText = false;
         private TextChunk previousTextChunk = null;
@@ -246,6 +252,7 @@ public class TriageProcessor {
             if (current.isWhiteSpaceChunk()) {
                 return;
             }
+            textChunkCount++;
             if (previousTextChunk != null && areSuspiciousTextChunks(previousTextChunk, current)) {
                 tablePatternCount++;
             }
@@ -274,8 +281,14 @@ public class TriageProcessor {
             double textCoverage = totalTextArea / pageArea;
             double missingToUnicodeRatio = totalFonts > 0 ? (double) fontsWithoutToUnicode / totalFonts : 0;
 
-            // Require minimum number of patterns to reduce false positives
-            boolean hasTablePattern = tablePatternCount >= MIN_TABLE_PATTERNS;
+            // Calculate pattern density (patterns per text chunk)
+            double patternDensity = textChunkCount > 0
+                    ? (double) tablePatternCount / textChunkCount
+                    : 0;
+
+            // Table detection: absolute count OR high density with minimum patterns
+            boolean hasTablePattern = tablePatternCount >= MIN_TABLE_PATTERNS
+                    || (patternDensity >= MIN_PATTERN_DENSITY && tablePatternCount >= MIN_PATTERNS_FOR_DENSITY);
 
             return new TriageSignals(imageAreaRatio, textCoverage, missingToUnicodeRatio,
                     hasType3Fonts, hasTablePattern, hasTablePattern, hasImage, hasText);

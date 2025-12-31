@@ -28,7 +28,7 @@ public class TriageProcessor {
 
     // Constants matching AbstractTableProcessor for table detection
     private static final double Y_DIFFERENCE_EPSILON = 0.1;
-    private static final double X_DIFFERENCE_EPSILON = 3;
+    private static final double X_DIFFERENCE_EPSILON = 1.5;
 
     // Minimum number of suspicious patterns required to flag as table
     // Reduces false positives from simple multi-column layouts or indented text
@@ -273,8 +273,10 @@ public class TriageProcessor {
             double imageAreaRatio = totalImageArea / pageArea;
             double textCoverage = totalTextArea / pageArea;
             double missingToUnicodeRatio = totalFonts > 0 ? (double) fontsWithoutToUnicode / totalFonts : 0;
+
             // Require minimum number of patterns to reduce false positives
             boolean hasTablePattern = tablePatternCount >= MIN_TABLE_PATTERNS;
+
             return new TriageSignals(imageAreaRatio, textCoverage, missingToUnicodeRatio,
                     hasType3Fonts, hasTablePattern, hasTablePattern, hasImage, hasText);
         }

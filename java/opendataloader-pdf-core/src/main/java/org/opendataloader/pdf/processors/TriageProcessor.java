@@ -43,6 +43,10 @@ public class TriageProcessor {
     // If X moves left by more than this ratio of text width, it's likely a new column
     private static final double MULTI_COLUMN_X_SHIFT_RATIO = 2.0;
 
+    // Consecutive pattern validation: require patterns to occur in sequence
+    // Isolated patterns are likely not tables
+    private static final int MIN_CONSECUTIVE_PATTERNS = 2;
+
     private TriageProcessor() {
         // Utility class
     }
@@ -201,6 +205,8 @@ public class TriageProcessor {
         private int fontsWithoutToUnicode = 0;
         private boolean hasType3Fonts = false;
         private int tablePatternCount = 0;
+        private int currentConsecutiveStreak = 0;
+        private int maxConsecutiveStreak = 0;
         private int textChunkCount = 0;
         private boolean hasImage = false;
         private boolean hasText = false;
@@ -259,6 +265,12 @@ public class TriageProcessor {
             textChunkCount++;
             if (previousTextChunk != null && areSuspiciousTextChunks(previousTextChunk, current)) {
                 tablePatternCount++;
+                currentConsecutiveStreak++;
+                if (currentConsecutiveStreak > maxConsecutiveStreak) {
+                    maxConsecutiveStreak = currentConsecutiveStreak;
+                }
+            } else {
+                currentConsecutiveStreak = 0;
             }
             previousTextChunk = current;
         }
@@ -297,9 +309,13 @@ public class TriageProcessor {
                     ? (double) tablePatternCount / textChunkCount
                     : 0;
 
-            // Table detection: absolute count OR high density with minimum patterns
-            boolean hasTablePattern = tablePatternCount >= MIN_TABLE_PATTERNS
-                    || (patternDensity >= MIN_PATTERN_DENSITY && tablePatternCount >= MIN_PATTERNS_FOR_DENSITY);
+            // Table detection requires:
+            // 1. At least MIN_CONSECUTIVE_PATTERNS consecutive patterns (filters isolated patterns)
+            // 2. Either absolute count OR high density with minimum patterns
+            boolean hasConsecutivePatterns = maxConsecutiveStreak >= MIN_CONSECUTIVE_PATTERNS;
+            boolean hasTablePattern = hasConsecutivePatterns
+                    && (tablePatternCount >= MIN_TABLE_PATTERNS
+                        || (patternDensity >= MIN_PATTERN_DENSITY && tablePatternCount >= MIN_PATTERNS_FOR_DENSITY));
 
             return new TriageSignals(imageAreaRatio, textCoverage, missingToUnicodeRatio,
                     hasType3Fonts, hasTablePattern, hasTablePattern, hasImage, hasText);

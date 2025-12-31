@@ -145,12 +145,11 @@ public class DocumentProcessor {
         LOGGER.log(Level.INFO, "Hybrid mode: writing fast_pages.json");
         HybridWriter.writeFastPagesJson(outputDir, inputPDF.getName(), fastPageContents);
 
-        if (!aiPageNumbers.isEmpty()) {
-            LOGGER.log(Level.INFO, "Hybrid mode: rendering {0} AI page images", aiPageNumbers.size());
-            HybridWriter.writeAiPageImages(outputDir, inputPdfName, config.getPassword(), aiPageNumbers);
-        }
+        // Note: AI page images are no longer rendered here.
+        // Python pipeline passes PDF path + AI page numbers to docling directly.
 
-        LOGGER.log(Level.INFO, "Hybrid mode: complete");
+        LOGGER.log(Level.INFO, "Hybrid mode: complete ({0} fast pages, {1} AI pages)",
+            new Object[]{fastPageNumbers.size(), aiPageNumbers.size()});
     }
 
     private static List<List<IObject>> processDocument(String inputPdfName, Config config) throws IOException {

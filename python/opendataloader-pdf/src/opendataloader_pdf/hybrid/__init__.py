@@ -12,11 +12,13 @@ from .config import (
     TableConfig,
     TriageConfig,
 )
+from .metrics import PipelineMetrics
 from .pipeline import HybridPipeline
 
 __all__ = [
     "HybridPipeline",
     "HybridPipelineConfig",
+    "PipelineMetrics",
     "TriageConfig",
     "AIModelConfig",
     "OCRConfig",

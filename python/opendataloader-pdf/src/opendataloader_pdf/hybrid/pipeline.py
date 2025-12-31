@@ -12,6 +12,7 @@ from typing import Any, Optional, Union
 from ..runner import run_jar
 from .config import HybridPipelineConfig
 from .merge import ResultMerger
+from .metrics import MetricsContext, PipelineMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,12 @@ class HybridPipeline:
         """
         self.config = config or HybridPipelineConfig()
         self._temp_dir: Optional[Path] = None
+        self._metrics: Optional[PipelineMetrics] = None
+
+    @property
+    def metrics(self) -> Optional[PipelineMetrics]:
+        """Get metrics from the last pipeline run."""
+        return self._metrics
 
     def process(
         self,
@@ -54,32 +61,57 @@ class HybridPipeline:
         if not pdf_path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
+        # Initialize metrics
+        self._metrics = PipelineMetrics()
+        self._metrics.start_pipeline()
+
         # Set up output directory
         work_dir = self._setup_work_dir(output_dir)
 
         try:
             # Phase 1: Run JAR with --hybrid
             logger.info(f"Running JAR preprocessing for {pdf_path.name}")
-            self._run_jar_hybrid(pdf_path, work_dir, password)
+            with MetricsContext(self._metrics.jar_phase):
+                self._run_jar_hybrid(pdf_path, work_dir, password)
 
             # Phase 2: Load triage results
             triage = self._load_triage(work_dir)
+            all_pages = triage.get("pages", [])
             ai_pages = self._get_ai_pages(triage)
+            fast_pages = [p for p in all_pages if p.get("path") == "fast"]
+
+            # Update metrics with page counts
+            self._metrics.total_pages = len(all_pages)
+            self._metrics.fast_pages = len(fast_pages)
+            self._metrics.ai_pages = len(ai_pages)
+            self._metrics.jar_phase.items_processed = len(fast_pages)
+
             logger.info(f"Found {len(ai_pages)} pages requiring AI processing")
 
             # Phase 3: Process AI pages
             ai_results: dict[int, dict[str, Any]] = {}
             if ai_pages:
-                ai_results = self._process_ai_pages(work_dir, ai_pages, triage)
+                page_numbers = sorted([p["page"] for p in ai_pages])
+                self._metrics.ai_page_range = (min(page_numbers), max(page_numbers))
+
+                with MetricsContext(self._metrics.ai_phase, len(ai_pages)):
+                    ai_results = self._process_ai_pages(ai_pages, triage, pdf_path)
 
             # Phase 4: Merge results
-            merger = ResultMerger(work_dir)
-            result = merger.merge(ai_results)
+            with MetricsContext(self._metrics.merge_phase, len(all_pages)):
+                merger = ResultMerger(work_dir)
+                result = merger.merge(ai_results)
 
             # Write output if output_dir was specified
             if output_dir:
                 output_path = work_dir / f"{pdf_path.stem}.json"
                 merger.write_output(result, output_path)
+
+            self._metrics.stop_pipeline()
+
+            # Log metrics summary
+            if logger.isEnabledFor(logging.INFO):
+                logger.info(self._metrics.summary())
 
             return result
 
@@ -170,80 +202,84 @@ class HybridPipeline:
 
     def _process_ai_pages(
         self,
-        work_dir: Path,
         ai_pages: list[dict[str, Any]],
         triage: dict[str, Any],
+        pdf_path: Path,
     ) -> dict[int, dict[str, Any]]:
         """Process AI-path pages with docling DocumentConverter.
 
+        Uses page_range to limit docling processing to only the range
+        containing AI pages, then filters results to AI pages only.
+
         Args:
-            work_dir: Working directory containing page images.
             ai_pages: List of page info for AI processing.
             triage: Full triage data.
+            pdf_path: Path to the original PDF file.
 
         Returns:
             Dictionary mapping page index (0-indexed) to processing results.
         """
-        ai_pages_dir = work_dir / "ai_pages"
-        if not ai_pages_dir.exists():
-            logger.warning("ai_pages directory not found")
+        if not ai_pages:
             return {}
 
-        results: dict[int, dict[str, Any]] = {}
+        # Get page numbers (1-indexed from triage)
+        page_numbers = sorted([p["page"] for p in ai_pages])
+        min_page = min(page_numbers)
+        max_page = max(page_numbers)
+        logger.info(
+            f"Processing {len(page_numbers)} AI pages with docling "
+            f"(range {min_page}-{max_page}): {page_numbers}"
+        )
 
-        # Initialize docling DocumentConverter once
+        # Initialize docling DocumentConverter
         from docling.document_converter import DocumentConverter
 
         converter = DocumentConverter()
 
-        for page_info in ai_pages:
-            page_num = page_info["page"]  # 1-indexed
-            page_idx = page_num - 1  # Convert to 0-indexed
+        results: dict[int, dict[str, Any]] = {}
 
-            image_path = ai_pages_dir / f"page_{page_num:03d}.png"
-            if not image_path.exists():
-                logger.warning(f"Page image not found: {image_path}")
-                continue
+        try:
+            # Convert only the page range containing AI pages
+            conv_result = converter.convert(
+                str(pdf_path),
+                page_range=(min_page, max_page),
+            )
+            doc = conv_result.document
 
-            try:
-                result = self._process_single_page_with_docling(
-                    converter, image_path, page_idx
-                )
-                results[page_idx] = result
-            except Exception as e:
-                logger.error(f"Error processing page {page_idx}: {e}")
+            # Extract elements only from AI pages (filter out fast pages in range)
+            ai_page_set = set(page_numbers)  # 1-indexed
+
+            for item, _level in doc.iterate_items():
+                # Get page number from item provenance
+                page_num = self._get_item_page_number(item)
+                if page_num is not None and page_num in ai_page_set:
+                    page_idx = page_num - 1  # Convert to 0-indexed
+                    if page_idx not in results:
+                        results[page_idx] = {"elements": [], "page": page_idx}
+
+                    element = self._convert_docling_item(item, page_idx)
+                    if element:
+                        results[page_idx]["elements"].append(element)
+
+        except Exception as e:
+            logger.error(f"Error processing PDF with docling: {e}")
 
         return results
 
-    def _process_single_page_with_docling(
-        self,
-        converter: Any,
-        image_path: Path,
-        page_idx: int,
-    ) -> dict[str, Any]:
-        """Process a single AI-path page using docling.
+    def _get_item_page_number(self, item: Any) -> Optional[int]:
+        """Extract page number from a docling item.
 
         Args:
-            converter: Docling DocumentConverter instance.
-            image_path: Path to page image.
-            page_idx: Page index (0-indexed).
+            item: Docling document item.
 
         Returns:
-            Extracted elements from docling.
+            Page number (1-indexed) or None if not available.
         """
-        # Convert image with docling
-        conv_result = converter.convert(str(image_path))
-        doc = conv_result.document
-
-        elements: list[dict[str, Any]] = []
-
-        # Extract text items from docling document
-        for item, _level in doc.iterate_items():
-            element = self._convert_docling_item(item, page_idx)
-            if element:
-                elements.append(element)
-
-        return {"elements": elements, "page": page_idx}
+        if hasattr(item, "prov") and item.prov:
+            prov = item.prov[0] if isinstance(item.prov, list) else item.prov
+            if hasattr(prov, "page_no"):
+                return prov.page_no
+        return None
 
     def _convert_docling_item(self, item: Any, page_idx: int) -> Optional[dict[str, Any]]:
         """Convert a docling item to OpenDataLoader JSON schema format.

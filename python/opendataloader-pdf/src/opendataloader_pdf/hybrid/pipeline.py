@@ -6,14 +6,12 @@ import json
 import logging
 import shutil
 import tempfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Optional, Union
 
 from ..runner import run_jar
 from .config import HybridPipelineConfig
 from .merge import ResultMerger
-from .models import ModelRegistry, LayoutAdapter, OCRAdapter, TableAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +174,7 @@ class HybridPipeline:
         ai_pages: list[dict[str, Any]],
         triage: dict[str, Any],
     ) -> dict[int, dict[str, Any]]:
-        """Process AI-path pages with models.
+        """Process AI-path pages with docling DocumentConverter.
 
         Args:
             work_dir: Working directory containing page images.
@@ -193,79 +191,116 @@ class HybridPipeline:
 
         results: dict[int, dict[str, Any]] = {}
 
-        # Process pages in batches
-        with ThreadPoolExecutor(max_workers=self.config.batch_size) as executor:
-            futures = {}
-            for page_info in ai_pages:
-                page_num = page_info["page"]  # 1-indexed
-                page_idx = page_num - 1  # Convert to 0-indexed
+        # Initialize docling DocumentConverter once
+        from docling.document_converter import DocumentConverter
 
-                image_path = ai_pages_dir / f"page_{page_num:03d}.png"
-                if not image_path.exists():
-                    logger.warning(f"Page image not found: {image_path}")
-                    continue
+        converter = DocumentConverter()
 
-                future = executor.submit(
-                    self._process_single_page,
-                    image_path,
-                    page_idx,
-                    page_info,
+        for page_info in ai_pages:
+            page_num = page_info["page"]  # 1-indexed
+            page_idx = page_num - 1  # Convert to 0-indexed
+
+            image_path = ai_pages_dir / f"page_{page_num:03d}.png"
+            if not image_path.exists():
+                logger.warning(f"Page image not found: {image_path}")
+                continue
+
+            try:
+                result = self._process_single_page_with_docling(
+                    converter, image_path, page_idx
                 )
-                futures[future] = page_idx
-
-            for future in as_completed(futures):
-                page_idx = futures[future]
-                try:
-                    result = future.result()
-                    results[page_idx] = result
-                except Exception as e:
-                    logger.error(f"Error processing page {page_idx}: {e}")
+                results[page_idx] = result
+            except Exception as e:
+                logger.error(f"Error processing page {page_idx}: {e}")
 
         return results
 
-    def _process_single_page(
+    def _process_single_page_with_docling(
         self,
+        converter: Any,
         image_path: Path,
         page_idx: int,
-        page_info: dict[str, Any],
     ) -> dict[str, Any]:
-        """Process a single AI-path page.
+        """Process a single AI-path page using docling.
 
         Args:
+            converter: Docling DocumentConverter instance.
             image_path: Path to page image.
             page_idx: Page index (0-indexed).
-            page_info: Triage info for this page.
 
         Returns:
-            Combined results from all enabled models.
+            Extracted elements from docling.
         """
+        # Convert image with docling
+        conv_result = converter.convert(str(image_path))
+        doc = conv_result.document
+
         elements: list[dict[str, Any]] = []
-        needs_ocr = page_info.get("needs_ocr", False)
-        needs_table_ai = page_info.get("needs_table_ai", False)
 
-        # Run layout analysis first (if enabled)
-        if self.config.ai_models.layout.enabled:
-            layout_adapter = ModelRegistry.get(LayoutAdapter, config=self.config.ai_models.layout)
-            layout_result = layout_adapter.process(image_path, page_idx)
-            elements.extend(layout_result.get("elements", []))
-
-        # Run OCR if needed and enabled
-        if needs_ocr and self.config.ai_models.ocr.enabled:
-            ocr_adapter = ModelRegistry.get(OCRAdapter, config=self.config.ai_models.ocr)
-            ocr_result = ocr_adapter.process(image_path, page_idx)
-
-            # Only add OCR elements if layout didn't produce text
-            layout_has_text = any(
-                e.get("type") in ("paragraph", "heading", "caption", "list item")
-                for e in elements
-            )
-            if not layout_has_text:
-                elements.extend(ocr_result.get("elements", []))
-
-        # Run table detection if needed and enabled
-        if needs_table_ai and self.config.ai_models.table.enabled:
-            table_adapter = ModelRegistry.get(TableAdapter, config=self.config.ai_models.table)
-            table_result = table_adapter.process(image_path, page_idx)
-            elements.extend(table_result.get("elements", []))
+        # Extract text items from docling document
+        for item, _level in doc.iterate_items():
+            element = self._convert_docling_item(item, page_idx)
+            if element:
+                elements.append(element)
 
         return {"elements": elements, "page": page_idx}
+
+    def _convert_docling_item(self, item: Any, page_idx: int) -> Optional[dict[str, Any]]:
+        """Convert a docling item to OpenDataLoader JSON schema format.
+
+        Args:
+            item: Docling document item.
+            page_idx: Page index (0-indexed).
+
+        Returns:
+            Element dict in JSON schema format, or None if not convertible.
+        """
+        from docling_core.types.doc.labels import DocItemLabel
+
+        # Map docling labels to our types
+        label_to_type = {
+            DocItemLabel.TEXT: "paragraph",
+            DocItemLabel.PARAGRAPH: "paragraph",
+            DocItemLabel.TITLE: "heading",
+            DocItemLabel.SECTION_HEADER: "heading",
+            DocItemLabel.CAPTION: "caption",
+            DocItemLabel.LIST_ITEM: "list item",
+            DocItemLabel.TABLE: "table",
+            DocItemLabel.PICTURE: "image",
+            DocItemLabel.CHART: "image",
+            DocItemLabel.FORMULA: "formula",
+            DocItemLabel.PAGE_HEADER: "header",
+            DocItemLabel.PAGE_FOOTER: "footer",
+            DocItemLabel.CODE: "code",
+            DocItemLabel.FOOTNOTE: "footnote",
+        }
+
+        item_label = getattr(item, "label", None)
+        item_type = label_to_type.get(item_label, "paragraph")
+
+        # Get text content
+        text = ""
+        if hasattr(item, "text"):
+            text = item.text or ""
+
+        # Get bounding box if available
+        bbox = [0, 0, 0, 0]
+        if hasattr(item, "prov") and item.prov:
+            prov = item.prov[0] if isinstance(item.prov, list) else item.prov
+            if hasattr(prov, "bbox"):
+                b = prov.bbox
+                bbox = [b.l, b.t, b.r, b.b] if hasattr(b, "l") else list(b)
+
+        element: dict[str, Any] = {
+            "type": item_type,
+            "page number": page_idx + 1,  # 1-indexed
+            "bounding box": bbox,
+        }
+
+        if item_type in ("paragraph", "heading", "caption", "list item"):
+            element["content"] = text
+            element["font"] = "docling"
+            element["font size"] = 12
+            element["text color"] = "#000000"
+
+        return element

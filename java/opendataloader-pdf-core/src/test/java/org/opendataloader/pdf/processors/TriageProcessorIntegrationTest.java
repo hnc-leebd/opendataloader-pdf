@@ -36,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class TriageProcessorIntegrationTest {
 
-    private static final Path SAMPLES_DIR = Paths.get("../../samples/pdf");
+    private static final Path SAMPLES_DIR = Paths.get("../../../opendataloader-bench/pdfs");
 
     // Document IDs that have tables (teds score is not null in evaluation.json)
     // These 42 documents should be detected as needing table AI

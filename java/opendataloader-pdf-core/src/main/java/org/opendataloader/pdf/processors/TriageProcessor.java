@@ -59,6 +59,10 @@ public class TriageProcessor {
     // Minimum number of horizontal + vertical line pairs for grid pattern
     private static final int MIN_GRID_LINES = 4;
 
+    // Row separator pattern: horizontal lines alternating with text
+    // Minimum number of line-text-line alternations to detect row separator pattern
+    private static final int MIN_ROW_SEPARATOR_PATTERN = 5;
+
     private TriageProcessor() {
         // Utility class
     }
@@ -230,6 +234,9 @@ public class TriageProcessor {
         private int horizontalLineCount = 0;
         private int verticalLineCount = 0;
         private int lineArtCount = 0;
+        // Row separator pattern tracking: line-text-line alternation
+        private boolean lastWasHorizontalLine = false;
+        private int rowSeparatorPatternCount = 0;
 
         void addImageArea(double area) {
             totalImageArea += area;
@@ -243,6 +250,13 @@ public class TriageProcessor {
             // Horizontal line: width >> height
             if (width > height * 3) {
                 horizontalLineCount++;
+                // Track row separator pattern: if we see a horizontal line after text,
+                // it could be a row separator
+                if (!lastWasHorizontalLine) {
+                    // Text was between this line and the previous line
+                    rowSeparatorPatternCount++;
+                }
+                lastWasHorizontalLine = true;
             }
             // Vertical line: height >> width
             else if (height > width * 3) {
@@ -259,6 +273,8 @@ public class TriageProcessor {
             hasText = true;
             checkFontProperties(textChunk);
             checkTablePattern(textChunk);
+            // Mark that we've seen text (for row separator pattern detection)
+            lastWasHorizontalLine = false;
         }
 
         private void checkFontProperties(TextChunk textChunk) {
@@ -353,6 +369,8 @@ public class TriageProcessor {
             boolean hasTableBorderLines = (horizontalLineCount + verticalLineCount) >= MIN_LINE_COUNT_FOR_TABLE;
             // LineArt (rectangles, paths) can also indicate table structure
             boolean hasSignificantLineArt = lineArtCount >= MIN_LINE_COUNT_FOR_TABLE;
+            // Row separator pattern: horizontal lines alternating with text (line-text-line-text-line)
+            boolean hasRowSeparatorPattern = rowSeparatorPatternCount >= MIN_ROW_SEPARATOR_PATTERN;
 
             // Table detection requires:
             // 1. At least MIN_CONSECUTIVE_PATTERNS consecutive patterns (filters isolated patterns)
@@ -361,7 +379,8 @@ public class TriageProcessor {
             // 2. Either absolute count OR high density with minimum patterns OR vector graphics
             boolean hasConsecutivePatterns = maxConsecutiveStreak >= MIN_CONSECUTIVE_PATTERNS;
             boolean hasHighPatternCount = tablePatternCount >= HIGH_PATTERN_COUNT_THRESHOLD;
-            boolean hasVectorTableBorders = hasGridLines || hasTableBorderLines || hasSignificantLineArt;
+            boolean hasVectorTableBorders = hasGridLines || hasTableBorderLines || hasSignificantLineArt
+                    || hasRowSeparatorPattern;
 
             boolean hasTablePattern = hasVectorTableBorders
                     || ((hasConsecutivePatterns || hasHighPatternCount)

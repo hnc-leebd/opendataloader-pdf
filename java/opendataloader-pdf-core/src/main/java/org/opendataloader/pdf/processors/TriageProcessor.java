@@ -39,6 +39,10 @@ public class TriageProcessor {
     private static final double MIN_PATTERN_DENSITY = 0.10;
     private static final int MIN_PATTERNS_FOR_DENSITY = 2;
 
+    // Multi-column layout filter: X shift ratio to detect column change
+    // If X moves left by more than this ratio of text width, it's likely a new column
+    private static final double MULTI_COLUMN_X_SHIFT_RATIO = 2.0;
+
     private TriageProcessor() {
         // Utility class
     }
@@ -266,6 +270,13 @@ public class TriageProcessor {
         private boolean areSuspiciousTextChunks(TextChunk previous, TextChunk current) {
             // Text going backwards suggests multi-column layout or table
             if (previous.getTopY() < current.getBottomY()) {
+                // Filter out multi-column layout: X moves significantly left
+                double xShift = previous.getLeftX() - current.getLeftX();
+                double textWidth = previous.getRightX() - previous.getLeftX();
+                if (textWidth > 0 && xShift > textWidth * MULTI_COLUMN_X_SHIFT_RATIO) {
+                    // Large leftward shift indicates new column, not table
+                    return false;
+                }
                 return true;
             }
             // Same baseline with large horizontal gap suggests table cell boundaries

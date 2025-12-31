@@ -12,6 +12,8 @@ import org.opendataloader.pdf.api.Config;
 import org.opendataloader.pdf.processors.TriageProcessor.PageTriage;
 import org.opendataloader.pdf.processors.TriageProcessor.TriageSignals;
 import org.verapdf.wcag.algorithms.entities.content.IChunk;
+import org.verapdf.wcag.algorithms.entities.content.LineArtChunk;
+import org.verapdf.wcag.algorithms.entities.content.LineChunk;
 import org.verapdf.wcag.algorithms.entities.content.TextChunk;
 import org.verapdf.wcag.algorithms.entities.geometry.BoundingBox;
 import org.verapdf.wcag.algorithms.semanticalgorithms.containers.StaticContainers;
@@ -34,13 +36,11 @@ public class TriageDebugTest {
 
     // False Negative documents - have tables but not detected
     private static final List<String> FALSE_NEGATIVE_DOCS = Arrays.asList(
-        "01030000000121.pdf",
+        "01030000000110.pdf",
         "01030000000122.pdf",
-        "01030000000127.pdf",
         "01030000000132.pdf",
-        "01030000000146.pdf",
-        "01030000000149.pdf",
-        "01030000000150.pdf"
+        "01030000000166.pdf",
+        "01030000000182.pdf"
     );
 
     // Constants from TriageProcessor for reference
@@ -92,9 +92,30 @@ public class TriageDebugTest {
             int maxConsecutiveStreak = 0;
             int currentStreak = 0;
             TextChunk previousTextChunk = null;
+            int horizontalLineCount = 0;
+            int verticalLineCount = 0;
+            int lineArtCount = 0;
+            int rowSeparatorPatternCount = 0;
+            boolean lastWasHorizontalLine = false;
 
             for (IChunk chunk : rawContents) {
-                if (chunk instanceof TextChunk) {
+                if (chunk instanceof LineChunk) {
+                    BoundingBox box = chunk.getBoundingBox();
+                    double width = box.getRightX() - box.getLeftX();
+                    double height = box.getTopY() - box.getBottomY();
+                    if (width > height * 3) {
+                        horizontalLineCount++;
+                        if (!lastWasHorizontalLine) {
+                            rowSeparatorPatternCount++;
+                        }
+                        lastWasHorizontalLine = true;
+                    } else if (height > width * 3) {
+                        verticalLineCount++;
+                    }
+                } else if (chunk instanceof LineArtChunk) {
+                    lineArtCount++;
+                } else if (chunk instanceof TextChunk) {
+                    lastWasHorizontalLine = false;
                     TextChunk current = (TextChunk) chunk;
                     if (!current.isWhiteSpaceChunk()) {
                         textChunkCount++;
@@ -147,6 +168,11 @@ public class TriageDebugTest {
             System.out.println("  Detected as table: " + triage.isNeedsTableAi());
             System.out.println("  Signals: gridAligned=" + signals.isHasGridAlignedText() +
                              ", suspiciousGaps=" + signals.isHasSuspiciousTextGaps());
+            System.out.println("  Vector graphics:");
+            System.out.println("    - Horizontal lines: " + horizontalLineCount);
+            System.out.println("    - Vertical lines: " + verticalLineCount);
+            System.out.println("    - LineArt chunks: " + lineArtCount);
+            System.out.println("    - Row separator patterns: " + rowSeparatorPatternCount);
         }
         System.out.println();
     }

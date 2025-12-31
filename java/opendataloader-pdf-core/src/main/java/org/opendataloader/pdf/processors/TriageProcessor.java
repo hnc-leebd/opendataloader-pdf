@@ -57,7 +57,8 @@ public class TriageProcessor {
     // Minimum number of line segments to suggest table borders
     private static final int MIN_LINE_COUNT_FOR_TABLE = 8;
     // Minimum number of horizontal + vertical line pairs for grid pattern
-    private static final int MIN_GRID_LINES = 4;
+    // Having both H and V lines is a strong indicator, so threshold is lower
+    private static final int MIN_GRID_LINES = 3;
 
     // Row separator pattern: horizontal lines alternating with text
     // Minimum number of line-text-line alternations to detect row separator pattern

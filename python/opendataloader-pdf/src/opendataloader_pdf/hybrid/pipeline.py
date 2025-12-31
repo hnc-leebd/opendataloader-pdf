@@ -208,8 +208,8 @@ class HybridPipeline:
     ) -> dict[int, dict[str, Any]]:
         """Process AI-path pages with docling DocumentConverter.
 
-        Uses page_range to limit docling processing to only the range
-        containing AI pages, then filters results to AI pages only.
+        Processes each AI page individually for better performance when
+        AI pages are sparse (e.g., pages 1,3,5,7,9 instead of range 1-9).
 
         Args:
             ai_pages: List of page info for AI processing.
@@ -224,12 +224,7 @@ class HybridPipeline:
 
         # Get page numbers (1-indexed from triage)
         page_numbers = sorted([p["page"] for p in ai_pages])
-        min_page = min(page_numbers)
-        max_page = max(page_numbers)
-        logger.info(
-            f"Processing {len(page_numbers)} AI pages with docling "
-            f"(range {min_page}-{max_page}): {page_numbers}"
-        )
+        logger.info(f"Processing {len(page_numbers)} AI pages with docling: {page_numbers}")
 
         # Initialize docling DocumentConverter
         from docling.document_converter import DocumentConverter
@@ -238,31 +233,25 @@ class HybridPipeline:
 
         results: dict[int, dict[str, Any]] = {}
 
-        try:
-            # Convert only the page range containing AI pages
-            conv_result = converter.convert(
-                str(pdf_path),
-                page_range=(min_page, max_page),
-            )
-            doc = conv_result.document
+        # Process each AI page individually
+        for page_num in page_numbers:
+            try:
+                conv_result = converter.convert(
+                    str(pdf_path),
+                    page_range=(page_num, page_num),
+                )
+                doc = conv_result.document
 
-            # Extract elements only from AI pages (filter out fast pages in range)
-            ai_page_set = set(page_numbers)  # 1-indexed
+                page_idx = page_num - 1  # Convert to 0-indexed
+                results[page_idx] = {"elements": [], "page": page_idx}
 
-            for item, _level in doc.iterate_items():
-                # Get page number from item provenance
-                page_num = self._get_item_page_number(item)
-                if page_num is not None and page_num in ai_page_set:
-                    page_idx = page_num - 1  # Convert to 0-indexed
-                    if page_idx not in results:
-                        results[page_idx] = {"elements": [], "page": page_idx}
-
+                for item, _level in doc.iterate_items():
                     element = self._convert_docling_item(item, page_idx)
                     if element:
                         results[page_idx]["elements"].append(element)
 
-        except Exception as e:
-            logger.error(f"Error processing PDF with docling: {e}")
+            except Exception as e:
+                logger.error(f"Error processing page {page_num} with docling: {e}")
 
         return results
 

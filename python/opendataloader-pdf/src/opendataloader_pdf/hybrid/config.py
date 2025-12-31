@@ -133,7 +133,7 @@ class HybridPipelineConfig:
     """Temporary directory for intermediate files. Uses system temp if None."""
 
     keep_intermediate: bool = False
-    """Whether to keep intermediate files (triage.json, fast_pages.json, ai_pages/)."""
+    """Whether to keep intermediate files (triage.json, all_pages.json, ai_pages/)."""
 
     @classmethod
     def fast_mode(cls) -> "HybridPipelineConfig":

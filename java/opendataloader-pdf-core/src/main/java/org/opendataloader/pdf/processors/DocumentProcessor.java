@@ -86,7 +86,7 @@ public class DocumentProcessor {
     /**
      * Processes a PDF file in hybrid mode.
      * Triages each page to determine processing path (fast vs AI),
-     * extracts content for fast pages, and renders images for AI pages.
+     * extracts content for all pages, and outputs triage info for Python to use.
      *
      * @param inputPdfName the path to the input PDF file
      * @param config the configuration settings
@@ -98,7 +98,6 @@ public class DocumentProcessor {
         outputDir.mkdirs();
 
         List<PageTriage> triageResults = new ArrayList<>();
-        Map<Integer, List<IObject>> fastPageContents = new HashMap<>();
         List<Integer> aiPageNumbers = new ArrayList<>();
 
         int numberOfPages = StaticContainers.getDocument().getNumberOfPages();
@@ -120,36 +119,25 @@ public class DocumentProcessor {
             }
         }
 
-        // Phase 2: Process fast pages with full extraction pipeline
-        List<Integer> fastPageNumbers = new ArrayList<>();
-        for (PageTriage triage : triageResults) {
-            if (TriageProcessor.PATH_FAST.equals(triage.getPath())) {
-                fastPageNumbers.add(triage.getPageNumber());
-            }
-        }
+        int fastPageCount = numberOfPages - aiPageNumbers.size();
 
-        if (!fastPageNumbers.isEmpty()) {
-            LOGGER.log(Level.INFO, "Hybrid mode: processing {0} fast pages", fastPageNumbers.size());
-            List<List<IObject>> allContents = processDocument(inputPdfName, config);
-            sortContents(allContents, config);
-
-            for (int pageNumber : fastPageNumbers) {
-                fastPageContents.put(pageNumber, allContents.get(pageNumber));
-            }
-        }
+        // Phase 2: Process ALL pages with full extraction pipeline
+        LOGGER.log(Level.INFO, "Hybrid mode: processing all {0} pages", numberOfPages);
+        List<List<IObject>> allContents = processDocument(inputPdfName, config);
+        sortContents(allContents, config);
 
         // Phase 3: Write outputs
         LOGGER.log(Level.INFO, "Hybrid mode: writing triage.json");
         HybridWriter.writeTriageJson(outputDir, triageResults);
 
-        LOGGER.log(Level.INFO, "Hybrid mode: writing fast_pages.json");
-        HybridWriter.writeFastPagesJson(outputDir, inputPDF.getName(), fastPageContents);
+        LOGGER.log(Level.INFO, "Hybrid mode: writing all_pages.json");
+        HybridWriter.writeAllPagesJson(outputDir, inputPDF.getName(), allContents);
 
         // Note: AI page images are no longer rendered here.
         // Python pipeline passes PDF path + AI page numbers to docling directly.
 
         LOGGER.log(Level.INFO, "Hybrid mode: complete ({0} fast pages, {1} AI pages)",
-            new Object[]{fastPageNumbers.size(), aiPageNumbers.size()});
+            new Object[]{fastPageCount, aiPageNumbers.size()});
     }
 
     private static List<List<IObject>> processDocument(String inputPdfName, Config config) throws IOException {

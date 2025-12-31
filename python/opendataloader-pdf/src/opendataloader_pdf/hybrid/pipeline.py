@@ -7,7 +7,7 @@ import logging
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, List, Optional, Union
 from docling.document_converter import DocumentConverter
 from ..runner import run_jar
 from .config import HybridPipelineConfig
@@ -43,20 +43,35 @@ class HybridPipeline:
 
     def process(
         self,
-        pdf_path: Union[str, Path],
-        output_dir: Optional[Union[str, Path]] = None,
+        pdf_path: Union[str, List[str]],
+        output_dir: Optional[str] = None,
         password: Optional[str] = None,
+        format: Optional[Union[str, List[str]]] = None,
+        quiet: bool = False,
+        content_safety_off: Optional[Union[str, List[str]]] = None,
+        keep_line_breaks: bool = False,
+        replace_invalid_chars: Optional[str] = None,
+        use_struct_tree: bool = False,
     ) -> dict[str, Any]:
         """Process a PDF using the hybrid pipeline.
 
         Args:
-            pdf_path: Path to the input PDF file.
+            pdf_path: Path to the input PDF file or list of paths.
             output_dir: Output directory. Uses temp dir if not specified.
             password: Password for encrypted PDF files.
+            format: Output format(s). Can be a single format string or list of formats.
+            quiet: If True, suppress output messages.
+            content_safety_off: Content safety setting(s) to disable.
+            keep_line_breaks: If True, keeps line breaks in the output.
+            replace_invalid_chars: Character to replace invalid or unrecognized characters with.
+            use_struct_tree: If True, enable processing structure tree.
 
         Returns:
             Merged JSON output following OpenDataLoader schema.
         """
+        # Handle list of paths - for now, process only the first one
+        if isinstance(pdf_path, list):
+            pdf_path = pdf_path[0]
         pdf_path = Path(pdf_path)
         if not pdf_path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
@@ -65,14 +80,30 @@ class HybridPipeline:
         self._metrics = PipelineMetrics()
         self._metrics.start_pipeline()
 
-        # Set up output directory
-        work_dir = self._setup_work_dir(output_dir)
+        # Set up temporary work directory for JAR output
+        work_dir = self._setup_work_dir()
+
+        # Set up user output directory if specified
+        user_output_dir: Optional[Path] = None
+        if output_dir:
+            user_output_dir = Path(output_dir)
+            user_output_dir.mkdir(parents=True, exist_ok=True)
 
         try:
-            # Phase 1: Run JAR with --hybrid
+            # Phase 1: Run JAR with --hybrid (output to temp work_dir)
             logger.info(f"Running JAR preprocessing for {pdf_path.name}")
             with MetricsContext(self._metrics.jar_phase):
-                self._run_jar_hybrid(pdf_path, work_dir, password)
+                self._run_jar_hybrid(
+                    pdf_path,
+                    work_dir,
+                    password,
+                    format=format,
+                    quiet=quiet,
+                    content_safety_off=content_safety_off,
+                    keep_line_breaks=keep_line_breaks,
+                    replace_invalid_chars=replace_invalid_chars,
+                    use_struct_tree=use_struct_tree,
+                )
 
             # Phase 2: Load triage results
             triage = self._load_triage(work_dir)
@@ -95,17 +126,33 @@ class HybridPipeline:
                 self._metrics.ai_page_range = page_numbers
 
                 with MetricsContext(self._metrics.ai_phase, len(ai_pages)):
-                    ai_results = self._process_ai_pages(ai_pages, triage, pdf_path)
+                    ai_results = self._process_ai_pages(
+                        ai_pages, triage, pdf_path, work_dir, format
+                    )
 
             # Phase 4: Merge results
             with MetricsContext(self._metrics.merge_phase, len(all_pages)):
                 merger = ResultMerger(work_dir)
                 result = merger.merge(ai_results)
 
-            # Write output if output_dir was specified
-            if output_dir:
-                output_path = work_dir / f"{pdf_path.stem}.json"
-                merger.write_output(result, output_path)
+            # Normalize format to list
+            output_formats: list[str] = []
+            if format:
+                if isinstance(format, str):
+                    output_formats = [format]
+                else:
+                    output_formats = list(format)
+            if not output_formats:
+                output_formats = ["json"]
+
+            # Write output to user-specified directory
+            if user_output_dir:
+                output_path = user_output_dir / f"{pdf_path.stem}.json"
+                merger.write_output(result, output_path, formats=output_formats)
+
+                # Copy intermediate files if keep_intermediate is True
+                if self.config.keep_intermediate:
+                    self._copy_intermediate_files(work_dir, user_output_dir)
 
             self._metrics.stop_pipeline()
 
@@ -116,26 +163,17 @@ class HybridPipeline:
             return result
 
         finally:
-            # Cleanup temp directory if not keeping intermediate files
+            # Cleanup temp directory (JAR intermediate files)
             if not self.config.keep_intermediate and self._temp_dir:
                 shutil.rmtree(self._temp_dir, ignore_errors=True)
                 self._temp_dir = None
 
-    def _setup_work_dir(self, output_dir: Optional[Union[str, Path]]) -> Path:
-        """Set up the working directory.
-
-        Args:
-            output_dir: User-specified output directory.
+    def _setup_work_dir(self) -> Path:
+        """Set up the temporary working directory for JAR intermediate files.
 
         Returns:
-            Path to working directory.
+            Path to temporary working directory.
         """
-        if output_dir:
-            work_dir = Path(output_dir)
-            work_dir.mkdir(parents=True, exist_ok=True)
-            return work_dir
-
-        # Use temp directory
         if self.config.temp_dir:
             self._temp_dir = Path(self.config.temp_dir)
         else:
@@ -144,11 +182,39 @@ class HybridPipeline:
         self._temp_dir.mkdir(parents=True, exist_ok=True)
         return self._temp_dir
 
+    def _copy_intermediate_files(self, work_dir: Path, output_dir: Path) -> None:
+        """Copy intermediate files from work directory to output directory.
+
+        Args:
+            work_dir: Temporary working directory with intermediate files.
+            output_dir: User-specified output directory.
+        """
+        intermediate_files = ["triage.json", "all_pages.json"]
+        for filename in intermediate_files:
+            src = work_dir / filename
+            if src.exists():
+                dst = output_dir / filename
+                shutil.copy2(src, dst)
+
+        # Copy ai_pages directory if exists
+        ai_pages_src = work_dir / "ai_pages"
+        if ai_pages_src.exists() and ai_pages_src.is_dir():
+            ai_pages_dst = output_dir / "ai_pages"
+            if ai_pages_dst.exists():
+                shutil.rmtree(ai_pages_dst)
+            shutil.copytree(ai_pages_src, ai_pages_dst)
+
     def _run_jar_hybrid(
         self,
         pdf_path: Path,
         output_dir: Path,
         password: Optional[str],
+        format: Optional[Union[str, List[str]]] = None,
+        quiet: bool = False,
+        content_safety_off: Optional[Union[str, List[str]]] = None,
+        keep_line_breaks: bool = False,
+        replace_invalid_chars: Optional[str] = None,
+        use_struct_tree: bool = False,
     ) -> None:
         """Run JAR with --hybrid flag.
 
@@ -156,6 +222,12 @@ class HybridPipeline:
             pdf_path: Path to input PDF.
             output_dir: Output directory.
             password: PDF password if encrypted.
+            format: Output format(s).
+            quiet: If True, suppress output messages.
+            content_safety_off: Content safety setting(s) to disable.
+            keep_line_breaks: If True, keeps line breaks in the output.
+            replace_invalid_chars: Character to replace invalid characters with.
+            use_struct_tree: If True, enable processing structure tree.
         """
         args = [
             str(pdf_path),
@@ -165,8 +237,26 @@ class HybridPipeline:
         ]
         if password:
             args.extend(["--password", password])
+        if format:
+            if isinstance(format, list):
+                for fmt in format:
+                    args.extend(["--format", fmt])
+            else:
+                args.extend(["--format", format])
+        if content_safety_off:
+            if isinstance(content_safety_off, list):
+                for cso in content_safety_off:
+                    args.extend(["--content-safety-off", cso])
+            else:
+                args.extend(["--content-safety-off", content_safety_off])
+        if keep_line_breaks:
+            args.append("--keep-line-breaks")
+        if replace_invalid_chars:
+            args.extend(["--replace-invalid-chars", replace_invalid_chars])
+        if use_struct_tree:
+            args.append("--use-struct-tree")
 
-        run_jar(args, quiet=False)
+        run_jar(args, quiet=quiet)
 
     def _load_triage(self, work_dir: Path) -> dict[str, Any]:
         """Load triage.json from work directory.
@@ -205,6 +295,8 @@ class HybridPipeline:
         ai_pages: list[dict[str, Any]],
         triage: dict[str, Any],
         pdf_path: Path,
+        work_dir: Path,
+        format: Optional[Union[str, List[str]]] = None,
     ) -> dict[int, dict[str, Any]]:
         """Process AI-path pages with docling DocumentConverter.
 
@@ -215,6 +307,8 @@ class HybridPipeline:
             ai_pages: List of page info for AI processing.
             triage: Full triage data.
             pdf_path: Path to the original PDF file.
+            work_dir: Working directory for output files.
+            format: Output format(s) - json, html, markdown, etc.
 
         Returns:
             Dictionary mapping page index (0-indexed) to processing results.
@@ -223,6 +317,16 @@ class HybridPipeline:
 
         if not ai_pages:
             return {}
+
+        # Normalize format to list
+        formats: list[str] = []
+        if format:
+            if isinstance(format, str):
+                formats = [format]
+            else:
+                formats = list(format)
+        if not formats:
+            formats = ["json"]
 
         # Get page numbers (1-indexed from triage)
         page_numbers = sorted([p["page"] for p in ai_pages])
@@ -234,6 +338,10 @@ class HybridPipeline:
         logger.debug(f"DocumentConverter init: {init_time:.2f}s")
 
         results: dict[int, dict[str, Any]] = {}
+
+        # Prepare output directory for AI pages
+        ai_output_dir = work_dir / "ai_pages"
+        ai_output_dir.mkdir(parents=True, exist_ok=True)
 
         # Process each AI page individually
         for page_num in page_numbers:
@@ -254,12 +362,56 @@ class HybridPipeline:
                     if element:
                         results[page_idx]["elements"].append(element)
 
+                # Export to requested formats
+                self._export_ai_page(
+                    doc, page_num, ai_output_dir, formats, pdf_path.stem
+                )
+
                 logger.debug(f"Page {page_num}: convert={convert_time:.2f}s")
 
             except Exception as e:
                 logger.error(f"Error processing page {page_num} with docling: {e}")
 
         return results
+
+    def _export_ai_page(
+        self,
+        doc: Any,
+        page_num: int,
+        output_dir: Path,
+        formats: list[str],
+        pdf_stem: str,
+    ) -> None:
+        """Export AI-processed page to requested formats.
+
+        Args:
+            doc: Docling document object.
+            page_num: Page number (1-indexed).
+            output_dir: Directory to write output files.
+            formats: List of output formats.
+            pdf_stem: PDF filename without extension.
+        """
+        base_name = f"{pdf_stem}_page_{page_num}"
+
+        for fmt in formats:
+            try:
+                if fmt == "json":
+                    # JSON is handled by the main merge process
+                    pass
+                elif fmt in ("markdown", "md", "markdown-with-html", "markdown-with-images"):
+                    md_content = doc.export_to_markdown()
+                    md_path = output_dir / f"{base_name}.md"
+                    md_path.write_text(md_content, encoding="utf-8")
+                elif fmt == "html":
+                    html_content = doc.export_to_html()
+                    html_path = output_dir / f"{base_name}.html"
+                    html_path.write_text(html_content, encoding="utf-8")
+                elif fmt == "text":
+                    text_content = doc.export_to_text()
+                    text_path = output_dir / f"{base_name}.txt"
+                    text_path.write_text(text_content, encoding="utf-8")
+            except Exception as e:
+                logger.warning(f"Failed to export page {page_num} to {fmt}: {e}")
 
     def _get_item_page_number(self, item: Any) -> Optional[int]:
         """Extract page number from a docling item.
@@ -330,8 +482,8 @@ class HybridPipeline:
 
         if item_type in ("paragraph", "heading", "caption", "list item"):
             element["content"] = text
-            element["font"] = "docling"
-            element["font size"] = 12
-            element["text color"] = "#000000"
+            element["font"] = ""
+            element["font size"] = 0
+            element["text color"] = "[0.0]"
 
         return element

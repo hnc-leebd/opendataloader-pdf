@@ -50,21 +50,26 @@ class TestHybridPipeline:
         pdf_path = work_dir / "test.pdf"
         pdf_path.write_bytes(b"%PDF-1.4")
 
-        # Create triage.json (all fast path)
-        triage_data = {"pages": [{"page": 1, "path": "fast"}]}
-        (work_dir / "triage.json").write_text(json.dumps(triage_data))
+        def setup_jar_output(args, quiet=False):
+            # Get the output dir from args
+            output_idx = args.index("--output-dir") + 1
+            jar_output_dir = Path(args[output_idx])
+            # Create triage.json (all fast path)
+            triage_data = {"pages": [{"page": 1, "path": "fast"}]}
+            (jar_output_dir / "triage.json").write_text(json.dumps(triage_data))
+            # Create fast_pages.json
+            fast_data = {
+                "file name": "test.pdf",
+                "number of pages": 1,
+                "author": None,
+                "title": None,
+                "creation date": None,
+                "modification date": None,
+                "kids": [],
+            }
+            (jar_output_dir / "fast_pages.json").write_text(json.dumps(fast_data))
 
-        # Create fast_pages.json
-        fast_data = {
-            "file name": "test.pdf",
-            "number of pages": 1,
-            "author": None,
-            "title": None,
-            "creation date": None,
-            "modification date": None,
-            "kids": [],
-        }
-        (work_dir / "fast_pages.json").write_text(json.dumps(fast_data))
+        mock_run_jar.side_effect = setup_jar_output
 
         config = HybridPipelineConfig(keep_intermediate=True)
         pipeline = HybridPipeline(config)
@@ -81,10 +86,15 @@ class TestHybridPipeline:
         pdf_path = work_dir / "test.pdf"
         pdf_path.write_bytes(b"%PDF-1.4")
 
-        triage_data = {"pages": []}
-        (work_dir / "triage.json").write_text(json.dumps(triage_data))
-        fast_data = {"file name": "test.pdf", "number of pages": 0, "author": None, "title": None, "creation date": None, "modification date": None, "kids": []}
-        (work_dir / "fast_pages.json").write_text(json.dumps(fast_data))
+        def setup_jar_output(args, quiet=False):
+            output_idx = args.index("--output-dir") + 1
+            jar_output_dir = Path(args[output_idx])
+            triage_data = {"pages": []}
+            (jar_output_dir / "triage.json").write_text(json.dumps(triage_data))
+            fast_data = {"file name": "test.pdf", "number of pages": 0, "author": None, "title": None, "creation date": None, "modification date": None, "kids": []}
+            (jar_output_dir / "fast_pages.json").write_text(json.dumps(fast_data))
+
+        mock_run_jar.side_effect = setup_jar_output
 
         config = HybridPipelineConfig(keep_intermediate=True)
         pipeline = HybridPipeline(config)
@@ -100,21 +110,25 @@ class TestHybridPipeline:
         pdf_path = work_dir / "test.pdf"
         pdf_path.write_bytes(b"%PDF-1.4")
 
-        triage_data = {"pages": [{"page": 1, "path": "fast"}]}
-        (work_dir / "triage.json").write_text(json.dumps(triage_data))
+        def setup_jar_output(args, quiet=False):
+            output_idx = args.index("--output-dir") + 1
+            jar_output_dir = Path(args[output_idx])
+            triage_data = {"pages": [{"page": 1, "path": "fast"}]}
+            (jar_output_dir / "triage.json").write_text(json.dumps(triage_data))
+            fast_data = {
+                "file name": "test.pdf",
+                "number of pages": 1,
+                "author": "Test Author",
+                "title": "Test Title",
+                "creation date": None,
+                "modification date": None,
+                "kids": [
+                    {"type": "paragraph", "page number": 1, "bounding box": [0, 0, 100, 20], "content": "Test content"}
+                ],
+            }
+            (jar_output_dir / "fast_pages.json").write_text(json.dumps(fast_data))
 
-        fast_data = {
-            "file name": "test.pdf",
-            "number of pages": 1,
-            "author": "Test Author",
-            "title": "Test Title",
-            "creation date": None,
-            "modification date": None,
-            "kids": [
-                {"type": "paragraph", "page number": 1, "bounding box": [0, 0, 100, 20], "content": "Test content"}
-            ],
-        }
-        (work_dir / "fast_pages.json").write_text(json.dumps(fast_data))
+        mock_run_jar.side_effect = setup_jar_output
 
         config = HybridPipelineConfig(keep_intermediate=True)
         pipeline = HybridPipeline(config)
@@ -144,23 +158,11 @@ class TestHybridPipeline:
         assert ai_pages[0]["page"] == 2
         assert ai_pages[1]["page"] == 4
 
-    def test_setup_work_dir_creates_directory(self):
-        """Test work directory creation."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_dir = Path(tmpdir) / "output"
-            pipeline = HybridPipeline()
+    def test_setup_work_dir_creates_temp_directory(self):
+        """Test work directory creates temp directory."""
+        pipeline = HybridPipeline()
 
-            work_dir = pipeline._setup_work_dir(output_dir)
-
-            assert work_dir.exists()
-            assert work_dir == output_dir
-
-    def test_setup_work_dir_uses_temp_when_none(self):
-        """Test temp directory is used when output_dir is None."""
-        config = HybridPipelineConfig()
-        pipeline = HybridPipeline(config)
-
-        work_dir = pipeline._setup_work_dir(None)
+        work_dir = pipeline._setup_work_dir()
 
         assert work_dir.exists()
         assert "hybrid_" in str(work_dir)
@@ -168,6 +170,17 @@ class TestHybridPipeline:
         # Cleanup
         import shutil
         shutil.rmtree(work_dir, ignore_errors=True)
+
+    def test_setup_work_dir_uses_config_temp_dir(self):
+        """Test config temp_dir is used when specified."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = HybridPipelineConfig(temp_dir=tmpdir)
+            pipeline = HybridPipeline(config)
+
+            work_dir = pipeline._setup_work_dir()
+
+            assert work_dir.exists()
+            assert str(work_dir) == tmpdir
 
 
 class TestHybridPipelineIntegration:

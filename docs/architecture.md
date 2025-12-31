@@ -150,9 +150,9 @@ java -jar opendataloader-pdf.jar document.pdf \
 # Output structure:
 #   /tmp/hybrid_output/
 #     triage.json         (page routing decisions)
-#     fast_pages.json     (fast path extraction results)
+#     all_pages.json      (JAR extraction for all pages)
 #     ai_pages/
-#       page_003.png      (AI path page images)
+#       page_003.png      (AI path page images, if needed)
 #       page_007.png
 ```
 
@@ -217,11 +217,10 @@ convert_with_ai("document.pdf")
 2. Call JAR with --hybrid --output-dir /tmp/xxx/
 3. JAR outputs:
    - triage.json (routing decisions)
-   - fast_pages.json (heuristic extraction)
-   - ai_pages/*.png (page images for AI)
+   - all_pages.json (JAR extraction for all pages)
 4. Load triage.json
-5. Process ai_pages/*.png with docling models
-6. Merge fast_pages.json + AI results
+5. Process AI-path pages with docling models
+6. Merge: AI results replace JAR extraction for AI pages
 7. Cleanup temp directory
     │
     ▼

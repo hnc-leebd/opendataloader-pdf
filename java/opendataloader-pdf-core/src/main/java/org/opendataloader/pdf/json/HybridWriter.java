@@ -37,13 +37,13 @@ import java.util.logging.Logger;
 
 /**
  * Writer for hybrid mode output files.
- * Produces triage.json, fast_pages.json, and page images for AI processing.
+ * Produces triage.json, all_pages.json, and page images for AI processing.
  */
 public class HybridWriter {
     private static final Logger LOGGER = Logger.getLogger(HybridWriter.class.getCanonicalName());
 
     private static final String TRIAGE_FILE_NAME = "triage.json";
-    private static final String FAST_PAGES_FILE_NAME = "fast_pages.json";
+    private static final String ALL_PAGES_FILE_NAME = "all_pages.json";
     private static final String AI_PAGES_DIR_NAME = "ai_pages";
 
     private static JsonGenerator createJsonGenerator(String fileName) throws IOException {
@@ -84,26 +84,24 @@ public class HybridWriter {
     }
 
     /**
-     * Writes fast_pages.json containing extraction results for fast-path pages.
+     * Writes all_pages.json containing extraction results for all pages.
      *
      * @param outputDir the output directory
      * @param pdfName the PDF file name
-     * @param fastPageContents map of page number to processed contents
+     * @param allPageContents list of processed contents for each page
      * @throws IOException if unable to write the file
      */
-    public static void writeFastPagesJson(File outputDir, String pdfName,
-                                          Map<Integer, List<IObject>> fastPageContents) throws IOException {
+    public static void writeAllPagesJson(File outputDir, String pdfName,
+                                         List<List<IObject>> allPageContents) throws IOException {
         StaticLayoutContainers.resetImageIndex();
-        String fileName = outputDir.getAbsolutePath() + File.separator + FAST_PAGES_FILE_NAME;
+        String fileName = outputDir.getAbsolutePath() + File.separator + ALL_PAGES_FILE_NAME;
         try (JsonGenerator gen = createJsonGenerator(fileName)) {
             gen.writeStartObject();
             writeDocumentInfo(gen, pdfName);
             gen.writeArrayFieldStart(JsonName.KIDS);
-            for (int pageNumber = 0; pageNumber < StaticContainers.getDocument().getNumberOfPages(); pageNumber++) {
-                if (fastPageContents.containsKey(pageNumber)) {
-                    for (IObject content : fastPageContents.get(pageNumber)) {
-                        gen.writePOJO(content);
-                    }
+            for (List<IObject> pageContents : allPageContents) {
+                for (IObject content : pageContents) {
+                    gen.writePOJO(content);
                 }
             }
             gen.writeEndArray();

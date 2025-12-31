@@ -2,7 +2,6 @@ import argparse
 import subprocess
 import sys
 import warnings
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from .cli_options_generated import add_options_to_parser
@@ -14,9 +13,15 @@ __all__ = ["convert", "convert_with_ai", "run", "run_jar", "main"]
 
 
 def convert_with_ai(
-    input_path: Union[str, Path],
-    output_dir: Optional[Union[str, Path]] = None,
+    input_path: Union[str, List[str]],
+    output_dir: Optional[str] = None,
     password: Optional[str] = None,
+    format: Optional[Union[str, List[str]]] = None,
+    quiet: bool = False,
+    content_safety_off: Optional[Union[str, List[str]]] = None,
+    keep_line_breaks: bool = False,
+    replace_invalid_chars: Optional[str] = None,
+    use_struct_tree: bool = False,
     config: Optional["HybridPipelineConfig"] = None,
 ) -> Dict[str, Any]:
     """Convert PDF using hybrid architecture with AI models.
@@ -26,9 +31,15 @@ def convert_with_ai(
     - Complex pages (scanned, tables, etc.): AI model processing
 
     Args:
-        input_path: Path to the input PDF file.
+        input_path: Path to the input PDF file or list of paths.
         output_dir: Directory for output files. Uses temp dir if not specified.
         password: Password for encrypted PDF files.
+        format: Output format(s). Can be a single format string or list of formats.
+        quiet: If True, suppress output messages.
+        content_safety_off: Content safety setting(s) to disable.
+        keep_line_breaks: If True, keeps line breaks in the output.
+        replace_invalid_chars: Character to replace invalid or unrecognized characters with.
+        use_struct_tree: If True, enable processing structure tree.
         config: Hybrid pipeline configuration. Uses defaults if not provided.
 
     Returns:
@@ -50,7 +61,17 @@ def convert_with_ai(
     from .hybrid import HybridPipeline, HybridPipelineConfig
 
     pipeline = HybridPipeline(config or HybridPipelineConfig())
-    return pipeline.process(input_path, output_dir, password)
+    return pipeline.process(
+        input_path,
+        output_dir,
+        password,
+        format=format,
+        quiet=quiet,
+        content_safety_off=content_safety_off,
+        keep_line_breaks=keep_line_breaks,
+        replace_invalid_chars=replace_invalid_chars,
+        use_struct_tree=use_struct_tree,
+    )
 
 
 # Type hint for import

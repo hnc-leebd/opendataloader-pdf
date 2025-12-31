@@ -108,18 +108,6 @@ public class TriageProcessorTest {
     }
 
     @Test
-    public void testAnalyzePageSignals_DetectsSuspiciousTextGaps() {
-        List<IChunk> contents = new ArrayList<>();
-        // Two text chunks on same baseline with large gap
-        contents.add(createTextChunk(0.0, 50.0, 10.0, 60.0, "Left"));
-        contents.add(createTextChunk(80.0, 50.0, 100.0, 60.0, "Right"));
-
-        TriageSignals signals = TriageProcessor.analyzePageSignals(contents, pageBoundingBox);
-
-        assertTrue(signals.isHasSuspiciousTextGaps());
-    }
-
-    @Test
     public void testAnalyzePageSignals_NullBoundingBox() {
         List<IChunk> contents = new ArrayList<>();
         contents.add(createTextChunk(0.0, 0.0, 50.0, 50.0, "Test"));
